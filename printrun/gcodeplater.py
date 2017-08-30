@@ -39,7 +39,7 @@ def extrusion_only(gline):
     return gline.e is not None \
         and (gline.x, gline.y, gline.z) == (None, None, None)
 
-# Custom method for gcoder.GCode to analyze & output gcode in a single call
+# Custom method for gcoder.GCode to analyze & output Gcode in a single call
 def gcoder_write(self, f, line, store = False):
     f.write(line)
     self.append(line, store = store)
@@ -74,8 +74,8 @@ def rewrite_gline(centeroffset, gline, cosr, sinr):
 
 class GcodePlaterPanel(PlaterPanel):
 
-    load_wildcard = _("GCODE files (*.gcode;*.GCODE;*.g)") + "|*.gcode;*.gco;*.g"
-    save_wildcard = _("GCODE files (*.gcode;*.GCODE;*.g)") + "|*.gcode;*.gco;*.g"
+    load_wildcard = _("GCODE files (*.Gcode;*.GCODE;*.g)") + "|*.Gcode;*.gco;*.g"
+    save_wildcard = _("GCODE files (*.Gcode;*.GCODE;*.g)") + "|*.Gcode;*.gco;*.g"
 
     def prepare_ui(self, filenames = [], callback = None,
                    parent = None, build_dimensions = None,
@@ -117,7 +117,7 @@ class GcodePlaterPanel(PlaterPanel):
     def done(self, event, cb):
         if not os.path.exists("tempgcode"):
             os.mkdir("tempgcode")
-        name = "tempgcode/" + str(int(time.time()) % 10000) + ".gcode"
+        name = "tempgcode/" + str(int(time.time()) % 10000) + ".Gcode"
         self.export_to(name)
         if cb is not None:
             cb(name)
@@ -130,7 +130,7 @@ class GcodePlaterPanel(PlaterPanel):
     # 3) [x] handling E correctly
     # 4) [x] handling position shifts: should we either reset absolute 0 using
     #        G92 or should we rewrite all positions ? => we use G92s
-    # 5) [ ] handling the start & end gcode properly ?
+    # 5) [ ] handling the start & end Gcode properly ?
     # 6) [x] handling of current tool
     # 7) [x] handling of Z moves for sequential printing (don't lower Z before
     #        reaching the next object print area)
@@ -241,7 +241,7 @@ if __name__ == '__main__':
         main.load_file(fn)
     main.filenames = None
     main.autoplate()
-    main.export_to("gcodeplate___test.gcode")
+    main.export_to("gcodeplate___test.Gcode")
     raise SystemExit
     main.Show()
     app.MainLoop()

@@ -434,7 +434,7 @@ class Gviz(wx.Panel):
             continue
 
     def _get_movement(self, start_pos, gline):
-        """Takes a start position and a gcode, and returns a 3-uple containing
+        """Takes a start position and a Gcode, and returns a 3-uple containing
         (final position, line, arc), with line and arc being None if not
         used"""
         target = start_pos[:]

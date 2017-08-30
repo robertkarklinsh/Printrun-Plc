@@ -35,11 +35,11 @@ def injector_edit(gcode, viz_layer, layer_idx):
     MacroEditor(_("Edit G-Code of layer %d (Z = %.03f)") % (viz_layer, z), lines, cb, True)
 
 def inject(gcode, viz_layer, layer_idx, toadd):
-    # TODO: save modified gcode after injection ?
+    # TODO: save modified Gcode after injection ?
     nlines = len(gcode.prepend_to_layer(toadd, layer_idx))
     logging.info(_("Successfully injected %d lines at beginning of layer %d") % (nlines, viz_layer))
 
 def rewritelayer(gcode, viz_layer, layer_idx, toadd):
-    # TODO: save modified gcode after edit ?
+    # TODO: save modified Gcode after edit ?
     nlines = len(gcode.rewrite_layer(toadd, layer_idx))
     logging.info(_("Successfully edited layer %d (which now contains %d lines)") % (viz_layer, nlines))

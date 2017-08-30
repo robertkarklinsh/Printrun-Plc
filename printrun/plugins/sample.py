@@ -15,9 +15,9 @@
 # You should have received a copy of the GNU General Public License
 # along with Printrun.  If not, see <http://www.gnu.org/licenses/>.
 
-from printrun.eventhandler import PrinterEventHandler
+from printrun.event_handler import EventHandler
 
-class SampleHandler(PrinterEventHandler):
+class SampleHandler(EventHandler):
     '''
     Sample event handler for printcore.
     '''
@@ -34,8 +34,8 @@ class SampleHandler(PrinterEventHandler):
     def on_send(self, command, gline):
         self.__write("on_send", command)
     
-    def on_recv(self, line):
-        self.__write("on_recv", line.strip())
+    def on_recv(self, msg):
+        self.__write("on_recv", msg.strip())
     
     def on_connect(self):
         self.__write("on_connect")

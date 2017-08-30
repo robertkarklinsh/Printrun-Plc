@@ -74,7 +74,7 @@ if __name__ == '__main__':
             statusreport = True
 
     if len(args) <= 1:
-        print "Error: Port or gcode file were not specified.\n"
+        print "Error: Port or Gcode file were not specified.\n"
         print usage
         sys.exit(2)
     elif len(args) > 1:

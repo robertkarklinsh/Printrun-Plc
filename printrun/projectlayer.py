@@ -315,13 +315,13 @@ class SettingsFrame(wx.Frame):
 
         fieldsizer.Add(wx.StaticText(self.panel, -1, "Pre-lift Gcode:"), pos = (6, 0), flag = wx.ALIGN_CENTER_VERTICAL)
         self.prelift_gcode = wx.TextCtrl(self.panel, -1, str(self._get_setting("project_prelift_gcode", "").replace("\\n", '\n')), size = (-1, 35), style = wx.TE_MULTILINE)
-        self.prelift_gcode.SetHelpText("Additional gcode to run before raising the Z axis. Be sure to take into account any additional time needed in the pause value, and be careful what gcode is added!")
+        self.prelift_gcode.SetHelpText("Additional Gcode to run before raising the Z axis. Be sure to take into account any additional time needed in the pause value, and be careful what Gcode is added!")
         self.prelift_gcode.Bind(wx.EVT_TEXT, self.update_prelift_gcode)
         fieldsizer.Add(self.prelift_gcode, pos = (6, 1), span = (2, 1))
 
         fieldsizer.Add(wx.StaticText(self.panel, -1, "Post-lift Gcode:"), pos = (6, 2), flag = wx.ALIGN_CENTER_VERTICAL)
         self.postlift_gcode = wx.TextCtrl(self.panel, -1, str(self._get_setting("project_postlift_gcode", "").replace("\\n", '\n')), size = (-1, 35), style = wx.TE_MULTILINE)
-        self.postlift_gcode.SetHelpText("Additional gcode to run after raising the Z axis. Be sure to take into account any additional time needed in the pause value, and be careful what gcode is added!")
+        self.postlift_gcode.SetHelpText("Additional Gcode to run after raising the Z axis. Be sure to take into account any additional time needed in the pause value, and be careful what Gcode is added!")
         self.postlift_gcode.Bind(wx.EVT_TEXT, self.update_postlift_gcode)
         fieldsizer.Add(self.postlift_gcode, pos = (6, 3), span = (2, 1))
 

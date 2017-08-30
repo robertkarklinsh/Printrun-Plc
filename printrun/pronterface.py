@@ -112,7 +112,7 @@ class ComboSetting(wxSetting):
         self.widget = wx.ComboBox(parent, -1, str(self.value), choices = self.choices, style = wx.CB_DROPDOWN)
         return self.widget
 
-class PronterWindow(MainWindow, pronsole.pronsole):
+class PronterWindow(MainWindow, pronsole.Pronsole):
 
     _fgcode = None
     printer_progress_time = time.time()
@@ -137,7 +137,7 @@ class PronterWindow(MainWindow, pronsole.pronsole):
     display_gauges = property(_get_display_gauges)
 
     def __init__(self, app, filename = None, size = winsize):
-        pronsole.pronsole.__init__(self)
+        pronsole.Pronsole.__init__(self)
         self.app = app
         self.window_ready = False
         self.ui_ready = False
@@ -149,8 +149,8 @@ class PronterWindow(MainWindow, pronsole.pronsole):
                 color = hexcolor_to_float(getattr(self.settings, cleanname), 4)
                 setattr(self, cleanname, list(color))
 
-        self.pauseScript = None #"pause.gcode"
-        self.endScript = None #"end.gcode"
+        self.pauseScript = None #"pause.Gcode"
+        self.endScript = None #"end.Gcode"
 
         self.filename = filename
 
@@ -334,7 +334,7 @@ class PronterWindow(MainWindow, pronsole.pronsole):
             dlg = wx.MessageDialog(self, _("Print in progress ! Are you really sure you want to quit ?"), _("Exit"), wx.YES_NO | wx.ICON_WARNING)
             if dlg.ShowModal() == wx.ID_NO:
                 return
-        pronsole.pronsole.kill(self)
+        pronsole.Pronsole.kill(self)
         global pronterface_quitting
         pronterface_quitting = True
         self.p.recvcb = None
@@ -908,11 +908,11 @@ Printrun. If not, see <http://www.gnu.org/licenses/>."""
         self.settings._add(recentfilessetting, self.update_recent_files)
 
     def add_cmdline_arguments(self, parser):
-        pronsole.pronsole.add_cmdline_arguments(self, parser)
+        pronsole.Pronsole.add_cmdline_arguments(self, parser)
         parser.add_argument('-a', '--autoconnect', help = _("automatically try to connect to printer on startup"), action = "store_true")
 
     def process_cmdline_arguments(self, args):
-        pronsole.pronsole.process_cmdline_arguments(self, args)
+        pronsole.Pronsole.process_cmdline_arguments(self, args)
         self.autoconnect = args.autoconnect
 
     def update_recent_files(self, param, value):
@@ -975,7 +975,7 @@ Printrun. If not, see <http://www.gnu.org/licenses/>."""
         wx.CallAfter(self.Refresh)
 
     def update_build_dimensions(self, param, value):
-        pronsole.pronsole.update_build_dimensions(self, param, value)
+        pronsole.Pronsole.update_build_dimensions(self, param, value)
         self.update_bed_viz()
 
     def update_bed_viz(self, *args):
@@ -1037,7 +1037,7 @@ Printrun. If not, see <http://www.gnu.org/licenses/>."""
         wx.CallAfter(self.gviz.Refresh)
         # Call pronsole's statuschecker inner loop function to handle
         # temperature monitoring and status loop sleep
-        pronsole.pronsole.statuschecker_inner(self, self.settings.monitor)
+        pronsole.Pronsole.statuschecker_inner(self, self.settings.monitor)
         try:
             while not self.sentglines.empty():
                 gc = self.sentglines.get_nowait()
@@ -1047,7 +1047,7 @@ Printrun. If not, see <http://www.gnu.org/licenses/>."""
             pass
 
     def statuschecker(self):
-        pronsole.pronsole.statuschecker(self)
+        pronsole.Pronsole.statuschecker(self)
         wx.CallAfter(self.statusbar.SetStatusText, _("Not connected to printer."))
 
     #  --------------------------------------------------------------
@@ -1283,7 +1283,7 @@ Printrun. If not, see <http://www.gnu.org/licenses/>."""
         self.p.send_now("M20")
 
     def model_to_gcode_filename(self, filename):
-        suffix = "_export.gcode"
+        suffix = "_export.Gcode"
         for ext in [".stl", ".obj"]:
             filename = filename.replace(ext, suffix)
             filename = filename.replace(ext.upper(), suffix)
@@ -1368,7 +1368,7 @@ Printrun. If not, see <http://www.gnu.org/licenses/>."""
         dlg = None
         if filename is None:
             dlg = wx.FileDialog(self, _("Open file to print"), basedir, style = wx.FD_OPEN | wx.FD_FILE_MUST_EXIST)
-            dlg.SetWildcard(_("OBJ, STL, and GCODE files (*.gcode;*.gco;*.g;*.stl;*.STL;*.obj;*.OBJ)|*.gcode;*.gco;*.g;*.stl;*.STL;*.obj;*.OBJ|GCODE files (*.gcode;*.gco;*.g)|*.gcode;*.gco;*.g|OBJ, STL files (*.stl;*.STL;*.obj;*.OBJ)|*.stl;*.STL;*.obj;*.OBJ|All Files (*.*)|*.*"))
+            dlg.SetWildcard(_("OBJ, STL, and GCODE files (*.Gcode;*.gco;*.g;*.stl;*.STL;*.obj;*.OBJ)|*.Gcode;*.gco;*.g;*.stl;*.STL;*.obj;*.OBJ|GCODE files (*.Gcode;*.gco;*.g)|*.Gcode;*.gco;*.g|OBJ, STL files (*.stl;*.STL;*.obj;*.OBJ)|*.stl;*.STL;*.obj;*.OBJ|All Files (*.*)|*.*"))
             try:
               dlg.SetFilterIndex(self.settings.last_file_filter)
             except:
@@ -1572,7 +1572,7 @@ Printrun. If not, see <http://www.gnu.org/licenses/>."""
             except:
                 pass
         dlg = wx.FileDialog(self, _("Save as"), basedir, style = wx.FD_SAVE)
-        dlg.SetWildcard(_("GCODE files (*.gcode;*.gco;*.g)|*.gcode;*.gco;*.g|All Files (*.*)|*.*"))
+        dlg.SetWildcard(_("GCODE files (*.Gcode;*.gco;*.g)|*.Gcode;*.gco;*.g|All Files (*.*)|*.*"))
         if dlg.ShowModal() == wx.ID_OK:
             name = dlg.GetPath()
             open(name, "w").write("\n".join((line.raw for line in self.fgcode)))
@@ -1589,17 +1589,17 @@ Printrun. If not, see <http://www.gnu.org/licenses/>."""
         if command.startswith(";@pause"):
             self.pause(None)
         else:
-            pronsole.pronsole.process_host_command(self, command)
+            pronsole.Pronsole.process_host_command(self, command)
 
     def startcb(self, resuming = False):
         """Callback on print start"""
-        pronsole.pronsole.startcb(self, resuming)
+        pronsole.Pronsole.startcb(self, resuming)
         if self.settings.lockbox and self.settings.lockonstart:
             wx.CallAfter(self.lock, force = True)
 
     def endcb(self):
         """Callback on print end/pause"""
-        pronsole.pronsole.endcb(self)
+        pronsole.Pronsole.endcb(self)
         if self.p.queueindex == 0:
             self.p.runSmallScript(self.endScript)
             if self.settings.display_progress_on_printer:
@@ -1631,7 +1631,7 @@ Printrun. If not, see <http://www.gnu.org/licenses/>."""
         wx.CallAfter(self.toolbarsizer.Layout)
 
     def sentcb(self, line, gline):
-        """Callback when a printer gcode has been sent"""
+        """Callback when a printer Gcode has been sent"""
         if not gline:
             pass
         elif gline.command in ["M104", "M109"]:
@@ -1671,7 +1671,7 @@ Printrun. If not, see <http://www.gnu.org/licenses/>."""
         return False
 
     def preprintsendcb(self, gline, next_gline):
-        """Callback when a printer gcode is about to be sent. We use it to
+        """Callback when a printer Gcode is about to be sent. We use it to
         exclude moves defined by the part excluder tool"""
         if not self.is_excluded_move(gline):
             return gline
@@ -1711,7 +1711,7 @@ Printrun. If not, see <http://www.gnu.org/licenses/>."""
                 return None
 
     def printsentcb(self, gline):
-        """Callback when a print gcode has been sent"""
+        """Callback when a print Gcode has been sent"""
         if gline.is_move:
             if hasattr(self.gwindow, "set_current_gline"):
                 wx.CallAfter(self.gwindow.set_current_gline, gline)
@@ -1720,7 +1720,7 @@ Printrun. If not, see <http://www.gnu.org/licenses/>."""
 
     def layer_change_cb(self, newlayer):
         """Callback when the printed layer changed"""
-        pronsole.pronsole.layer_change_cb(self, newlayer)
+        pronsole.Pronsole.layer_change_cb(self, newlayer)
         if self.settings.mainviz != "3D" or self.settings.trackcurrentlayer3d:
             wx.CallAfter(self.gviz.setlayer, newlayer)
 
@@ -2151,14 +2151,14 @@ Printrun. If not, see <http://www.gnu.org/licenses/>."""
                 self.end_macro()
             MacroEditor(macro_name, old_macro_definition, cb)
         else:
-            pronsole.pronsole.start_macro(self, macro_name, old_macro_definition)
+            pronsole.Pronsole.start_macro(self, macro_name, old_macro_definition)
 
     def end_macro(self):
-        pronsole.pronsole.end_macro(self)
+        pronsole.Pronsole.end_macro(self)
         self.update_macros_menu()
 
     def delete_macro(self, macro_name):
-        pronsole.pronsole.delete_macro(self, macro_name)
+        pronsole.Pronsole.delete_macro(self, macro_name)
         self.update_macros_menu()
 
     def new_macro(self, e = None):

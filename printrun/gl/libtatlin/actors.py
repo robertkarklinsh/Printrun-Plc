@@ -666,7 +666,7 @@ class GcodeModel(Model):
                     "layer_idxs_map", "count_travel_indices",
                     "count_print_indices", "count_print_vertices",
                     "path_halfwidth", "path_halfheight",
-                    "gcode"]:
+                    "Gcode"]:
             setattr(copy, var, getattr(self, var))
         copy.loaded = True
         copy.fully_loaded = True
@@ -944,7 +944,7 @@ class GcodeModelLight(Model):
         for var in ["vertices", "colors", "max_layers",
                     "num_layers_to_draw", "printed_until",
                     "layer_stops", "dims", "only_current",
-                    "layer_idxs_map", "gcode"]:
+                    "layer_idxs_map", "Gcode"]:
             setattr(copy, var, getattr(self, var))
         copy.loaded = True
         copy.fully_loaded = True

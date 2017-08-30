@@ -731,7 +731,7 @@ class LightGCode(GCode):
 
 def main():
     if len(sys.argv) < 2:
-        print "usage: %s filename.gcode" % sys.argv[0]
+        print "usage: %s filename.Gcode" % sys.argv[0]
         return
 
     print "Line object size:", sys.getsizeof(Line("G0 X0"))
