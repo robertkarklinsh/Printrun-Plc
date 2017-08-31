@@ -1,3 +1,5 @@
+import logging
+
 from event_handler import EventHandler
 
 
@@ -10,7 +12,7 @@ class PlcEventHandler(EventHandler):
         pass
 
     def on_recv(self, msg):
-        pass
+        logging.log(4, msg)
 
     def on_connect(self):
         pass
