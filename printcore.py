@@ -20,7 +20,7 @@ import getopt
 import sys
 import getopt
 
-from printrun.printcore import printcore
+from printrun.printcore import PrintCore
 from printrun.utils import setup_logging
 from printrun import gcoder
 
@@ -82,7 +82,7 @@ if __name__ == '__main__':
         filename = args[-1]
         print "Printing: %s on %s with baudrate %d" % (filename, port, baud)
 
-    p = printcore(port, baud)
+    p = PrintCore(port, baud)
     p.loud = loud
     time.sleep(2)
     gcode = [i.strip() for i in open(filename)]

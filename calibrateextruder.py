@@ -31,7 +31,7 @@ t = int(n * 60) / s  # Time to wait for extrusion
 try:
     from printdummy import printcore
 except ImportError:
-    from printcore import printcore
+    from printcore import PrintCore
 
 import time
 import getopt

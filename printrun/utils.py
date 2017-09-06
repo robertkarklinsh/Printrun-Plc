@@ -22,17 +22,42 @@ import subprocess
 import shlex
 import logging
 
+from collections import defaultdict
+
+
 # Set up Internationalization using gettext
 # searching for installed locales on /usr/share; uses relative folder if not
 # found (windows)
+
+class PlcError(Exception):
+    """ Pin some details to exception object as it is passed higher in stack trace
+    and use appropriate message format. """
+
+    def __init__(self, msg='plc error', port=None, baud=None):
+        # Example message format: 'something on %(port)s happened at %(time)s'
+        self._message = msg
+        self.port = port
+        self.baud = baud
+
+    @property
+    def message(self):
+        """ Assembly of error message using pinned data. Call when you catch exception. """
+        return self._message % defaultdict(lambda: '', self.__dict__)
+
+    @message.setter
+    def message(self, value):
+        self._message = value
+
+
 def install_locale(domain):
     if os.path.exists('/usr/share/pronterface/locale'):
-        gettext.install(domain, '/usr/share/pronterface/locale', unicode = 1)
+        gettext.install(domain, '/usr/share/pronterface/locale', unicode=1)
     elif os.path.exists('/usr/local/share/pronterface/locale'):
         gettext.install(domain, '/usr/local/share/pronterface/locale',
-                        unicode = 1)
+                        unicode=1)
     else:
-        gettext.install(domain, './locale', unicode = 1)
+        gettext.install(domain, './locale', unicode=1)
+
 
 class LogFormatter(logging.Formatter):
     def __init__(self, format_default, format_info):
@@ -47,7 +72,8 @@ class LogFormatter(logging.Formatter):
             self._fmt = self.format_default
         return super(LogFormatter, self).format(record)
 
-def setup_logging(out, filepath = None, reset_handlers = False):
+
+def setup_logging(out, filepath=None, reset_handlers=False):
     logger = logging.getLogger()
     logger.setLevel(logging.INFO)
     if reset_handlers:
@@ -64,11 +90,13 @@ def setup_logging(out, filepath = None, reset_handlers = False):
         logging_handler.setFormatter(formatter)
         logger.addHandler(logging_handler)
 
+
 def iconfile(filename):
     if hasattr(sys, "frozen") and sys.frozen == "windows_exe":
         return sys.executable
     else:
         return pixmapfile(filename)
+
 
 def imagefile(filename):
     for prefix in ['/usr/local/share/pronterface/images',
@@ -83,6 +111,7 @@ def imagefile(filename):
     else:
         return os.path.join("images", filename)
 
+
 def lookup_file(filename, prefixes):
     local_candidate = os.path.join(os.path.dirname(sys.argv[0]), filename)
     if os.path.exists(local_candidate):
@@ -93,16 +122,20 @@ def lookup_file(filename, prefixes):
             return candidate
     return filename
 
+
 def pixmapfile(filename):
     return lookup_file(filename, ['/usr/local/share/pixmaps',
                                   '/usr/share/pixmaps'])
+
 
 def sharedfile(filename):
     return lookup_file(filename, ['/usr/local/share/pronterface',
                                   '/usr/share/pronterface'])
 
+
 def configfile(filename):
     return lookup_file(filename, [os.path.expanduser("~/.printrun/"), ])
+
 
 def decode_utf8(s):
     try:
@@ -111,13 +144,16 @@ def decode_utf8(s):
         pass
     return s
 
+
 def format_time(timestamp):
     return datetime.datetime.fromtimestamp(timestamp).strftime("%H:%M:%S")
 
-def format_duration(delta):
-    return str(datetime.timedelta(seconds = int(delta)))
 
-def prepare_command(command, replaces = None):
+def format_duration(delta):
+    return str(datetime.timedelta(seconds=int(delta)))
+
+
+def prepare_command(command, replaces=None):
     command = shlex.split(command.replace("\\", "\\\\").encode())
     if replaces:
         replaces["$python"] = sys.executable
@@ -126,24 +162,27 @@ def prepare_command(command, replaces = None):
     command = [bit.encode() for bit in command]
     return command
 
-def run_command(command, replaces = None, stdout = subprocess.STDOUT, stderr = subprocess.STDOUT, blocking = False):
+
+def run_command(command, replaces=None, stdout=subprocess.STDOUT, stderr=subprocess.STDOUT, blocking=False):
     command = prepare_command(command, replaces)
     if blocking:
         return subprocess.call(command)
     else:
-        return subprocess.Popen(command, stderr = stderr, stdout = stdout)
+        return subprocess.Popen(command, stderr=stderr, stdout=stdout)
+
 
 def get_command_output(command, replaces):
     p = run_command(command, replaces,
-                    stdout = subprocess.PIPE, stderr = subprocess.STDOUT,
-                    blocking = False)
+                    stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                    blocking=False)
     return p.stdout.read()
+
 
 def dosify(name):
     return os.path.split(name)[1].split(".")[0][:8] + ".g"
 
-class RemainingTimeEstimator(object):
 
+class RemainingTimeEstimator(object):
     drift = None
     gcode = None
 
@@ -181,6 +220,7 @@ class RemainingTimeEstimator(object):
         self.last_estimate = (estimate, total)
         return self.last_estimate
 
+
 def parse_build_dimensions(bdim):
     # a string containing up to six numbers delimited by almost anything
     # first 0-3 numbers specify the build volume, no sign, always positive
@@ -199,8 +239,10 @@ def parse_build_dimensions(bdim):
         if bdl_float[i] <= 0: bdl_float[i] = 1
     return bdl_float
 
+
 def get_home_pos(build_dimensions):
     return build_dimensions[6:9] if len(build_dimensions) >= 9 else None
+
 
 def hexcolor_to_float(color, components):
     color = color[1:]
@@ -210,11 +252,13 @@ def hexcolor_to_float(color, components):
     return tuple(round(float(int(color[i:i + ndigits], 16)) / div, 2)
                  for i in range(0, numel, ndigits))
 
+
 def check_rgb_color(color):
     if len(color[1:]) % 3 != 0:
         ex = ValueError(_("Color must be specified as #RGB"))
         ex.from_validator = True
         raise ex
+
 
 def check_rgba_color(color):
     if len(color[1:]) % 4 != 0:
@@ -222,7 +266,10 @@ def check_rgba_color(color):
         ex.from_validator = True
         raise ex
 
+
 tempreport_exp = re.compile("([TB]\d*):([-+]?\d*\.?\d*)(?: ?\/)?([-+]?\d*\.?\d*)")
+
+
 def parse_temperature_report(report):
     matches = tempreport_exp.findall(report)
     return dict((m[0], (m[1], m[2])) for m in matches)

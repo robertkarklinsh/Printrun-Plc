@@ -15,30 +15,29 @@
 # You should have received a copy of the GNU General Public License
 # along with Printrun.  If not, see <http://www.gnu.org/licenses/>.
 
-import cmd
-import glob
-import os
-import time
-import threading
-import sys
-import shutil
-import subprocess
-import codecs
 import argparse
+import cmd
+import codecs
+import glob
 import locale
 import logging
-import traceback
+import os
 import re
+import shutil
+import subprocess
+import sys
+import threading
+import time
+import traceback
 
+from printrun import gcoder
+from printrun import spoolmanager
 from serial import SerialException
 
-from .settings import Settings, BuildDimensionsSetting
-from .power import powerset_print_start, powerset_print_stop
-from printrun import gcoder
-from .rpc import ProntRPC
-from printrun import spoolmanager
-
 from . import printcore
+from .power import powerset_print_start, powerset_print_stop
+from .rpc import ProntRPC
+from .settings import Settings, BuildDimensionsSetting
 from .utils import install_locale, run_command, get_command_output, \
     format_time, format_duration, RemainingTimeEstimator, \
     get_home_pos, parse_build_dimensions, parse_temperature_report, \
@@ -122,22 +121,28 @@ class Pronsole(cmd.Cmd):
         cmd.Cmd.__init__(self)
         if not READLINE:
             self.completekey = None
+
+        # PrintCore instance. Handles all communication with printer.
+        self.p = printcore.PrintCore()
+        self.p.recvcb = self.recvcb
+        self.p.startcb = self.startcb
+        self.p.endcb = self.endcb
+        self.p.layerchangecb = self.layer_change_cb
+        self.p.process_host_command = self.process_host_command
+        self.p.onlinecb = self.online
+        self.p.errorcb = self.logError
+
+        # Handles all communication with PLC.
+        # self.plc_connection_handler = plc_connection.PlcConnection()
+
         self.status = Status()
         self.dynamic_temp = False
         self.compute_eta = None
         self.statuscheck = False
         self.status_thread = None
         self.monitor_interval = 3
-        self.p = printcore.printcore()
-        self.p.recvcb = self.recvcb
-        self.p.startcb = self.startcb
-        self.p.endcb = self.endcb
-        self.p.layerchangecb = self.layer_change_cb
-        self.p.process_host_command = self.process_host_command
         self.recvlisteners = []
         self.in_macro = False
-        self.p.onlinecb = self.online
-        self.p.errorcb = self.logError
         self.fgcode = None
         self.filename = None
         self.rpc_server = None
@@ -208,8 +213,6 @@ class Pronsole(cmd.Cmd):
         the remainder of the line as argument.
 
         """
-
-
 
         self.preloop()
         if self.use_rawinput and self.completekey:

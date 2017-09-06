@@ -1,0 +1,29 @@
+import sys
+import time
+from multiprocessing import Queue
+
+from printrun.plc.plc_handler import PlcHandler
+
+
+def test_connection(f, q):
+    def wrapped(*args, **kwargs):
+        q.put('OK')
+        return f(*args, **kwargs)
+
+    return wrapped
+
+
+if __name__ == '__main__':
+    q = Queue()
+    PlcHandler.check_status = test_connection(PlcHandler.check_status, q)
+    plc_proc = PlcHandler()
+    plc_proc.start()
+    time.sleep(5)
+    plc_proc.stopped.set()
+    plc_proc.join()
+
+    try:
+        msg = q.get(block=False)
+        sys.exit(0) if msg == 'OK' else sys.exit(1)
+    except Exception:
+        sys.exit(1)
