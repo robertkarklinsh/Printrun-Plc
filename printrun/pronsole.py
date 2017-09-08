@@ -30,6 +30,7 @@ import threading
 import time
 import traceback
 
+from plc.plc_handler import PlcHandler
 from printrun import gcoder
 from printrun import spoolmanager
 from serial import SerialException
@@ -133,7 +134,10 @@ class Pronsole(cmd.Cmd):
         self.p.errorcb = self.logError
 
         # Handles all communication with PLC.
-        # self.plc_connection_handler = plc_connection.PlcConnection()
+        self.plc = None
+        self.plc_pipe = None
+        self.plc_thread = None
+        self.listen_to_plc = False
 
         self.status = Status()
         self.dynamic_temp = False
@@ -342,6 +346,10 @@ class Pronsole(cmd.Cmd):
         return stop
 
     def kill(self):
+        self.listen_to_plc = False
+        if self.plc.is_alive():
+            self.plc.stopped.set()
+            self.plc.join()
         self.statuscheck = False
         if self.status_thread:
             self.status_thread.join()
@@ -729,14 +737,14 @@ class Pronsole(cmd.Cmd):
 
     def add_cmdline_arguments(self, parser):
         parser.add_argument('-v', '--verbose',
-                            help=("increase verbosity"), action="store_true")
-        parser.add_argument('-c', '--conf', '--config', help=(
-            "load this file on startup instead of .pronsolerc ; you may chain config files, if so settings auto-save will use the last specified file"),
+                            help="increase verbosity", action="store_true")
+        parser.add_argument('-c', '--conf', '--config', help=
+        "load this file on startup instead of .pronsolerc ; you may chain config files, if so settings auto-save will use the last specified file",
                             action="append", default=[])
-        parser.add_argument('-e', '--execute', help=(
-            "executes command after configuration/.pronsolerc is loaded ; macros/settings from these commands are not autosaved"),
+        parser.add_argument('-e', '--execute', help=
+        "executes command after configuration/.pronsolerc is loaded ; macros/settings from these commands are not autosaved",
                             action="append", default=[])
-        parser.add_argument('filename', nargs='?', help=("file to load"))
+        parser.add_argument('filename', nargs='?', help="file to load")
 
     def process_cmdline_arguments(self, args):
         if args.verbose:
@@ -803,6 +811,14 @@ class Pronsole(cmd.Cmd):
         self.statuscheck = True
         self.status_thread = threading.Thread(target=self.statuschecker)
         self.status_thread.start()
+
+        if self.plc is None or not self.plc.is_alive():
+            self.plc = PlcHandler()
+            self.plc_pipe = self.plc.subscribe()
+            self.plc.start()
+            self.listen_to_plc = True
+            self.plc_thread = threading.Thread(target=self.plc_listener)
+            self.plc_thread.start()
         return True
 
     def do_connect(self, l):
@@ -926,6 +942,35 @@ class Pronsole(cmd.Cmd):
     def statuschecker(self):
         while self.statuscheck:
             self.statuschecker_inner()
+
+    # ---------------------------------------------------------------
+    #  Plc communication handling
+    # ---------------------------------------------------------------
+
+    def plc_listener(self):
+        while self.listen_to_plc:
+            counter = 0
+            if not self.plc.connected.is_set():
+                counter = -10
+            while self.plc_pipe.poll() and counter < 5:
+                counter += 1
+                msg = self.plc_pipe.recv()
+                if msg[0] == 'e':
+                    self.logError(msg[1:])
+                if msg[0] == 'l':
+                    self.log(msg[1:])
+            cur_time = time.time()
+            wait_time = 0
+            while time.time() < cur_time + self.monitor_interval - 0.25:
+                time.sleep(0.25)
+                # Safeguard: if system time changes and goes back in the past,
+                # we could get stuck almost forever
+                wait_time += 0.25
+                if wait_time > self.monitor_interval - 0.25:
+                    break
+            # Always sleep at least a bit, if something goes wrong with the
+            # system time we'll avoid freezing the whole app this way
+            time.sleep(0.25)
 
     # --------------------------------------------------------------
     #  File loading handling

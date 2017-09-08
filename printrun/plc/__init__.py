@@ -1,3 +1,4 @@
+# PlcHandler <-> Plc communication protocol
 ACK = '\x06'
 SYN = '\x16'
 EOT = '\x04'
@@ -5,6 +6,11 @@ PWR_ON = '\x11'
 PWR_OFF = '\x12'
 E_LIMIT = '\xff'
 E_BUTTON = '\xf0'
+
+# PlcHandler <-> Pronsole channels
+LOG = 'l'
+ERR = 'e'
+ACT = 'a'
 
 DEVICES_DESCRIPTION = {
     'A1': 'Smoothie',

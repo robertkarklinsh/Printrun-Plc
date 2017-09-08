@@ -49,14 +49,19 @@ def set_timeout(timeout):
 
 
 class PlcHandler(multiprocessing.Process):
-    def __init__(self, console=None, printcore=None, connection=PlcConnection()):
+    def __init__(self, connection=PlcConnection()):
         multiprocessing.Process.__init__(self)
-        self.console = console
-        self.printcore = printcore
+
+        self.outer_pipe = multiprocessing.Pipe()
+
         self.connection = connection
         self.connection.on_recv = self.on_recv
+        self.connection.on_disconnect = self.on_disconnect
+        self.connection.log = self.log
+        self.connection.logError = self.logError
         self.msg_queue = None
 
+        self.connected = multiprocessing.Event()
         self.stopped = multiprocessing.Event()
 
         self.msg_handlers = {
@@ -69,14 +74,11 @@ class PlcHandler(multiprocessing.Process):
 
     def run(self):
 
-        try:
-            self.connection.open()
-        except PlcError as e:
-            self.on_error(e)
-            self.stopped.set()
-        else:
+        if self.connection.open():
             self.msg_queue = Queue.Queue()
-
+            self.connected.set()
+        else:
+            return
         while not self.stopped.is_set():
             try:
                 msg = self.msg_queue.get_nowait()
@@ -91,14 +93,28 @@ class PlcHandler(multiprocessing.Process):
                                      'on %(port)s, check connection' +
                                      '\n' + 'Error: %s' % ex,
                                      port=self.connection.port)
-                        raise e
+                        self.on_error(e)
             except Queue.Empty:
                 pass
-            except PlcError as e:
-                # Todo: pass to on_error method
-                self.on_error(e)
 
-        self.connection.close()
+        if self.connected.is_set():
+            self.connected.clear()
+            self.connection.close()
+        else:
+            self.connection.close(force=True)
+
+    def subscribe(self):
+        return self.outer_pipe[1]
+
+    def log(self, msg):
+        self.outer_pipe[0].send('l' + msg)
+
+    def logError(self, msg):
+        self.outer_pipe[0].send('e' + msg)
+
+    def on_disconnect(self):
+        self.connected.clear()
+        self.stopped.set()
 
     def on_recv(self, msg):
         if self.msg_queue is not None:
@@ -108,10 +124,11 @@ class PlcHandler(multiprocessing.Process):
                 logger.error('Message queue overflow: %s' % e)
 
     def on_error(self, e):
-        raise NotImplementedError
+        self.outer_pipe[0].send('e' + e.message)
 
     @set_timeout(PLC_CHECK_STATUS_TIMEOUT)
     def check_status(self, *args):
+        self.log('CONTROLLINO: OK')
         return True
 
     def power_switching(self, msg):

@@ -16,6 +16,7 @@ PLC_CONNECTION_TIMEOUT = 1
 CONTROLLINO_PORT = '/dev/ttyACM'
 CONTROLLINO_BAUD = 57600
 CONNECTION_RETRIES_NUMBER = 5
+MAX_READ_ATTEMPTS = 5
 
 
 # ch = logging.StreamHandler()
@@ -56,6 +57,9 @@ class PlcConnection(object):
 
         # Handles new messages from plc
         self.on_recv = None
+        self.on_disconnect = None
+        self.log = None
+        self.logError = None
 
     @locked
     def open(self, port=None, baud=None):
@@ -63,34 +67,37 @@ class PlcConnection(object):
         if baud is not None:
             self.baud = baud
         i = 0
+        default_port = self.port
         while i < 5:
             try:
                 if port is None:
-                    self.port = self.port + str(i)
+                    self.port = default_port + str(i)
                 else:
                     self.port = port
                     i = 4
-                logger.debug('Opening connection on %s ...' % self.port)
+                self.log('Opening plc connection on %s ...' % self.port)
                 self.plc = Serial(port=self.port,
                                   baudrate=self.baud,
                                   timeout=self.timeout,
                                   parity=self.parity)
                 self._handshake()
             except SerialException as e:
-                logger.error(("Could not connect to %s at baudrate %s:") % (self.port, self.baud) +
-                             "\n" + ("Serial error: %s") % e)
+                self.logError(("Could not connect to plc on %s at baudrate %s:") % (self.port, self.baud) +
+                              "\n" + ("Serial error: %s") % e)
             except Exception as e:
-                logger.error(("Could not connect to %s at baudrate %s:") % (self.port, self.baud) +
-                             "\n" + ("Error: %s") % e)
+                self.logError(("Could not connect to plc on %s at baudrate %s:") % (self.port, self.baud) +
+                              "\n" + ("Error: %s") % e)
             else:
+                self.log('Plc is online')
                 self.stop_listen, self.stop_send = False, False
                 self.listen_thread = threading.Thread(target=self._listen, name='listen_thread')
                 self.listen_thread.start()
-                return self
+                return True
             finally:
                 i += 1
+        return False
 
-        raise PlcError('could not connect to plc')
+        # raise PlcError('could not connect to plc')
 
     def send(self, command):
         try:
@@ -99,26 +106,27 @@ class PlcConnection(object):
                 self.send_thread = threading.Thread(target=self._send, name='send_thread')
                 self.send_thread.start()
         except Full:
-            logger.error('Could not send command to %s:' % self.port +
-                         '\n' + 'Command queue overflow')
+            self.logError('Could not send command to %s:' % self.port +
+                          '\n' + 'Command queue overflow')
         except Exception as e:
-            logger.error('Could not send command to %s:' % self.port +
-                         '\n' + 'Error %s' % e)
+            self.logError('Could not send command to %s:' % self.port +
+                          '\n' + 'Error %s' % e)
 
-    def close(self):
+    def close(self, force=False):
         try:
-            logger.debug('Closing connection on %s ...' % self.port)
+            self.log('Closing connection on %s ...' % self.port)
             self.stop_listen, self.stop_send = True, True
             if self.listen_thread is not None:
                 self.listen_thread.join()
             if self.send_thread is not None:
                 self.send_thread.join()
             if self.plc is not None:
-                self.plc.write(EOT + '\n')
+                if not force:
+                    self.plc.write(EOT + '\n')
                 self.plc.close()
         except Exception as e:
-            logger.error('Could not close connection %s:' % self.port +
-                         '\n' + 'Error %s' % e)
+            self.logError('Could not close connection %s:' % self.port +
+                          '\n' + 'Error %s' % e)
 
     def _handshake(self):
         if self.plc is not None:
@@ -136,23 +144,34 @@ class PlcConnection(object):
         raise PlcError('handshaking failed')
 
     def _listen(self):
+        fail_count = 0
         while not self.stop_listen:
             try:
                 # Reads until '\n' is found or timeout expires.
                 msg = self.plc.read_until()
                 if msg:
-                    logger.debug('Received message from %s: ' % self.port +
-                                 '\n' + msg)
-                    self.on_recv(msg.rstrip())  # chr(int(msg.rstrip())))
+                    # self.log('Received message from %s: ' % self.port +
+                    #          '\n' + msg)
+                    self.on_recv(msg.rstrip())
             except PlcError as e:
-                logger.error('PlcCommunicationError on %s:' % self.port +
-                             '\n' + e.message)
+                self.logError('PlcCommunicationError on %s:' % self.port +
+                              '\n' + e.message)
+                fail_count += 1
             except SerialException as e:
-                logger.error('Could not read data from %s:' % self.port +
-                             '\n' + 'Serial error %s' % e)
+                self.logError('Could not read data from %s:' % self.port +
+                              '\n' + 'Serial error %s' % e)
+                fail_count += 1
             except Exception as e:
-                logger.error('Could not read data from %s:' % self.port +
-                             '\n' + 'Error %s' % e)
+                self.logError('Could not read data from %s:' % self.port +
+                              '\n' + 'Error %s' % e)
+                fail_count += 1
+            else:
+                fail_count = 0
+            finally:
+                if fail_count > MAX_READ_ATTEMPTS - 2:
+                    self.logError('Closing plc connection after %s ' % MAX_READ_ATTEMPTS + 'read attempts...')
+                    self.on_disconnect()
+                    return
 
     def _send(self):
         while not self.stop_send:
@@ -161,13 +180,13 @@ class PlcConnection(object):
                 msg = self.command_queue.get(timeout=self.timeout)
                 self.plc.write(msg)
                 self.command_queue.task_done()
-                logger.debug('Sent message to %s: ' % self.port +
-                             '\n' + msg)
+                # logger.debug('Sent message to %s: ' % self.port +
+                #              '\n' + msg)
             except Empty:
                 pass
             except SerialException as e:
-                logger.error('Could not send command to %s:' % self.port +
-                             '\n' + 'Serial error %s' % e)
+                self.logError('Could not send command to %s:' % self.port +
+                              '\n' + 'Serial error %s' % e)
             except Exception as e:
-                logger.error('Could not send command to %s:' % self.port +
-                             '\n' + 'Error %s' % e)
+                self.logError('Could not send command to %s:' % self.port +
+                              '\n' + 'Error %s' % e)
