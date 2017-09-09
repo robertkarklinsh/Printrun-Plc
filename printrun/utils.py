@@ -33,7 +33,7 @@ class PlcError(Exception):
     """ Pin some details to exception object as it is passed higher in stack trace
     and use appropriate message format. """
 
-    def __init__(self, msg='plc error', port=None, baud=None):
+    def __init__(self, msg='plc error', port='plc port', baud='baud'):
         # Example message format: 'something on %(port)s happened at %(time)s'
         self._message = msg
         self.port = port

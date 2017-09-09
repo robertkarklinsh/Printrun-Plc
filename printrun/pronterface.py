@@ -1227,10 +1227,12 @@ Printrun. If not, see <http://www.gnu.org/licenses/>."""
             self.status_thread = None
 
         # Disconnect from plc
-        self.plc.stopped.set()
-        self.plc.join()
+        self.listen_to_plc = False
         self.plc_thread.join()
         self.plc_thread = None
+        self.plc.stopped.set()
+        self.plc.join()
+        self.plc = None
 
         wx.CallAfter(self.connectbtn.SetLabel, "Connect")
         wx.CallAfter(self.connectbtn.SetToolTip, wx.ToolTip("Connect to the printer"))

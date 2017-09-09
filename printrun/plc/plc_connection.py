@@ -11,7 +11,7 @@ from printrun.plc import (ACK, SYN, EOT)
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 
-PLC_CONNECTION_TIMEOUT = 1
+PLC_CONNECTION_TIMEOUT = 0.25
 
 CONTROLLINO_PORT = '/dev/ttyACM'
 CONTROLLINO_BAUD = 57600
@@ -59,10 +59,11 @@ class PlcConnection(object):
         self.on_recv = None
         self.on_disconnect = None
         self.log = None
+        self.logDebug = None
         self.logError = None
 
     @locked
-    def open(self, port=None, baud=None):
+    def open(self, port=None, baud=None, printer_port=None):
 
         if baud is not None:
             self.baud = baud
@@ -75,7 +76,9 @@ class PlcConnection(object):
                 else:
                     self.port = port
                     i = 4
-                self.log('Opening plc connection on %s ...' % self.port)
+                if self.port == printer_port:
+                    continue
+                self.logDebug('Opening plc connection on %s ...' % self.port)
                 self.plc = Serial(port=self.port,
                                   baudrate=self.baud,
                                   timeout=self.timeout,
@@ -88,7 +91,7 @@ class PlcConnection(object):
                 self.logError(("Could not connect to plc on %s at baudrate %s:") % (self.port, self.baud) +
                               "\n" + ("Error: %s") % e)
             else:
-                self.log('Plc is online')
+                self.logDebug('Plc is online')
                 self.stop_listen, self.stop_send = False, False
                 self.listen_thread = threading.Thread(target=self._listen, name='listen_thread')
                 self.listen_thread.start()
@@ -114,7 +117,7 @@ class PlcConnection(object):
 
     def close(self, force=False):
         try:
-            self.log('Closing connection on %s ...' % self.port)
+            self.logDebug('Closing connection on %s ...' % self.port)
             self.stop_listen, self.stop_send = True, True
             if self.listen_thread is not None:
                 self.listen_thread.join()
@@ -152,6 +155,7 @@ class PlcConnection(object):
                 if msg:
                     # self.log('Received message from %s: ' % self.port +
                     #          '\n' + msg)
+                    # time.sleep(0.1)
                     self.on_recv(msg.rstrip())
             except PlcError as e:
                 self.logError('PlcCommunicationError on %s:' % self.port +

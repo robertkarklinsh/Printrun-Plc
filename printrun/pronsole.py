@@ -347,9 +347,10 @@ class Pronsole(cmd.Cmd):
 
     def kill(self):
         self.listen_to_plc = False
-        if self.plc.is_alive():
+        if self.plc is not None:
             self.plc.stopped.set()
             self.plc.join()
+            self.plc = None
         self.statuscheck = False
         if self.status_thread:
             self.status_thread.join()
@@ -813,7 +814,7 @@ class Pronsole(cmd.Cmd):
         self.status_thread.start()
 
         if self.plc is None or not self.plc.is_alive():
-            self.plc = PlcHandler()
+            self.plc = PlcHandler(printer_port=port)
             self.plc_pipe = self.plc.subscribe()
             self.plc.start()
             self.listen_to_plc = True
@@ -958,7 +959,11 @@ class Pronsole(cmd.Cmd):
                 if msg[0] == 'e':
                     self.logError(msg[1:])
                 if msg[0] == 'l':
-                    self.log(msg[1:])
+                    if self.p.loud:
+                        self.log(msg[1:])
+                # # Uncomment this to see debug messages
+                # if msg[0] == 'd':
+                #     self.log(msg[1:])
             cur_time = time.time()
             wait_time = 0
             while time.time() < cur_time + self.monitor_interval - 0.25:

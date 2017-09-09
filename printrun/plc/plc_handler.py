@@ -7,7 +7,7 @@ from printrun.plc import (ACK, PWR_ON, PWR_OFF, E_LIMIT, E_BUTTON)
 from printrun.plc.plc_connection import PlcConnection
 from printrun.utils import PlcError
 
-PLC_CHECK_STATUS_TIMEOUT = 20
+PLC_CHECK_STATUS_TIMEOUT = 5
 PLC_INFO_TIMEOUT = 0.25
 
 CONTROLLINO_PORT = '/dev/ttyACM'
@@ -40,7 +40,7 @@ def set_timeout(timeout):
             return f(self, *args, **kwargs)
 
         wrapped.e = PlcError()
-        wrapped.e.message = 'Could not receive OK signal on %(port)s for %(timeout)'
+        wrapped.e.message = 'Could not receive OK signal on %(port)s for %(timeout)s'
         wrapped.e.timeout = timeout
         wrapped.timer = None
         return wrapped
@@ -49,16 +49,18 @@ def set_timeout(timeout):
 
 
 class PlcHandler(multiprocessing.Process):
-    def __init__(self, connection=PlcConnection()):
+    def __init__(self, printer_port=None):
         multiprocessing.Process.__init__(self)
 
         self.outer_pipe = multiprocessing.Pipe()
 
-        self.connection = connection
+        self.connection = PlcConnection()
+        self.printer_port = printer_port
         self.connection.on_recv = self.on_recv
         self.connection.on_disconnect = self.on_disconnect
         self.connection.log = self.log
         self.connection.logError = self.logError
+        self.connection.logDebug = self.logDebug
         self.msg_queue = None
 
         self.connected = multiprocessing.Event()
@@ -74,7 +76,7 @@ class PlcHandler(multiprocessing.Process):
 
     def run(self):
 
-        if self.connection.open():
+        if self.connection.open(printer_port=self.printer_port):
             self.msg_queue = Queue.Queue()
             self.connected.set()
         else:
@@ -109,6 +111,9 @@ class PlcHandler(multiprocessing.Process):
     def log(self, msg):
         self.outer_pipe[0].send('l' + msg)
 
+    def logDebug(self, msg):
+        self.outer_pipe[0].send('d' + msg)
+
     def logError(self, msg):
         self.outer_pipe[0].send('e' + msg)
 
@@ -125,6 +130,7 @@ class PlcHandler(multiprocessing.Process):
 
     def on_error(self, e):
         self.outer_pipe[0].send('e' + e.message)
+        pass
 
     @set_timeout(PLC_CHECK_STATUS_TIMEOUT)
     def check_status(self, *args):
