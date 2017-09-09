@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 Printrun consists of printcore, pronsole and pronterface, and a small collection of helpful scripts.
 
   * printcore.py is a library that makes writing reprap hosts easy
@@ -479,3 +480,7 @@ along with Printrun.  If not, see <http://www.gnu.org/licenses/>.
 ```
 
 All scripts should contain this license note, if not, feel free to ask us. Please note that files where it is difficult to state this license note (such as images) are distributed under the same terms.
+=======
+# pronterface-plc
+Fork of pronterface for handling plc communication 
+>>>>>>> 2838c373a881267400287b14d977bd1791edf61b
