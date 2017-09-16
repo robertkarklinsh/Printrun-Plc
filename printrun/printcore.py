@@ -718,8 +718,8 @@ class PrintCore():
             except:
                 logging.warning(("Could not analyze command %s:") % command +
                                 "\n" + traceback.format_exc())
-            if self.loud:
-                logging.info("SENT: %s" % command)
+            # if self.loud:
+            #     logging.info("SENT: %s" % command)
 
             for handler in self.event_handler:
                 try:
@@ -755,3 +755,6 @@ class PrintCore():
                 self.logError((u"Socket connection broken, disconnected. ({0}): {1}").format(
                     e.errno, decode_utf8(e.strerror)))
                 self.writefailures += 1
+
+            if self.loud:
+                logging.info("SENT: %s" % command)
