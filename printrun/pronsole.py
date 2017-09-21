@@ -406,6 +406,14 @@ class Pronsole(cmd.Cmd):
             else:
                 self.logError(("Printer is not online."))
             return
+        elif l[0] == "!":
+            if self.plc.connected.set() and self.plc_pipe is not None:
+                if not self.p.loud:
+                    self.log("SENDING TO PLC:" + l[1:])
+                self.plc_pipe.send(l[1:])
+            else:
+                self.logError("PLC is not online.")
+            return
         else:
             cmd.Cmd.default(self, l)
 

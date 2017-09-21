@@ -2,8 +2,10 @@
 ACK = '\x06'
 SYN = '\x16'
 EOT = '\x04'
-PWR_ON = '\x11'
-PWR_OFF = '\x12'
+PWR_UP_REQ = 'POWERUP'
+PWR_UP_RESP = '\x12'
+PWR_DOWN_REQ = '\x13'
+PWR_DOWN_RESP = '\x14'
 E_LIMIT = '\xff'
 E_BUTTON = '\xf0'
 

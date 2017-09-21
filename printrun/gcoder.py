@@ -30,8 +30,8 @@ m114_exp = re.compile("\([^\(\)]*\)|[/\*].*\n|([XYZ]):?([-+]?[0-9]*\.?[0-9]*)")
 specific_exp = "(?:\([^\(\)]*\))|(?:;.*)|(?:[/\*].*\n)|(%s[-+]?[0-9]*\.?[0-9]*)"
 move_gcodes = ["G0", "G1", "G2", "G3"]
 
-class PyLine(object):
 
+class PyLine(object):
     __slots__ = ('x', 'y', 'z', 'e', 'f', 'i', 'j',
                  'raw', 'command', 'is_move',
                  'relative', 'relative_e',
@@ -45,8 +45,8 @@ class PyLine(object):
     def __getattr__(self, name):
         return None
 
-class PyLightLine(object):
 
+class PyLightLine(object):
     __slots__ = ('raw', 'command')
 
     def __init__(self, l):
@@ -55,8 +55,10 @@ class PyLightLine(object):
     def __getattr__(self, name):
         return None
 
+
 try:
     import gcoder_line
+
     Line = gcoder_line.GLine
     LightLine = gcoder_line.GLightLine
 except Exception, e:
@@ -64,17 +66,23 @@ except Exception, e:
     Line = PyLine
     LightLine = PyLightLine
 
+
 def find_specific_code(line, code):
     exp = specific_exp % code
     bits = [bit for bit in re.findall(exp, line.raw) if bit]
-    if not bits: return None
-    else: return float(bits[0][1:])
+    if not bits:
+        return None
+    else:
+        return float(bits[0][1:])
+
 
 def S(line):
     return find_specific_code(line, "S")
 
+
 def P(line):
     return find_specific_code(line, "P")
+
 
 def split(line):
     split_raw = gcode_exp.findall(line.raw.lower())
@@ -90,7 +98,8 @@ def split(line):
     line.is_move = line.command in move_gcodes
     return split_raw
 
-def parse_coordinates(line, split_raw, imperial = False, force = False):
+
+def parse_coordinates(line, split_raw, imperial=False, force=False):
     # Not a G-line, we don't want to parse its arguments
     if not force and line.command[0] != "G":
         return
@@ -100,16 +109,16 @@ def parse_coordinates(line, split_raw, imperial = False, force = False):
         if code not in gcode_parsed_nonargs and bit[1]:
             setattr(line, code, unit_factor * float(bit[1]))
 
-class Layer(list):
 
+class Layer(list):
     __slots__ = ("duration", "z")
 
-    def __init__(self, lines, z = None):
+    def __init__(self, lines, z=None):
         super(Layer, self).__init__(lines)
         self.z = z
 
-class GCode(object):
 
+class GCode(object):
     line_class = Line
 
     lines = None
@@ -134,11 +143,11 @@ class GCode(object):
     current_z = 0
     # For E this is the absolute position from machine start
     current_e = 0
-    current_e_multi=[0]
+    current_e_multi = [0]
     total_e = 0
-    total_e_multi=[0]
+    total_e_multi = [0]
     max_e = 0
-    max_e_multi=[0]
+    max_e_multi = [0]
     # Current feedrate
     current_f = 0
     # Offset: current offset between the machine origin and the machine current
@@ -159,7 +168,7 @@ class GCode(object):
     # current abs X in machine current coordinate system: current_x - offset_x
 
     filament_length = None
-    filament_length_multi=[0]
+    filament_length_multi = [0]
     duration = None
     xmin = None
     xmax = None
@@ -178,30 +187,37 @@ class GCode(object):
     # absolute position of the head at a given time
     def _get_abs_x(self):
         return self.current_x - self.offset_x
+
     abs_x = property(_get_abs_x)
 
     def _get_abs_y(self):
         return self.current_y - self.offset_y
+
     abs_y = property(_get_abs_y)
 
     def _get_abs_z(self):
         return self.current_z - self.offset_z
+
     abs_z = property(_get_abs_z)
 
     def _get_abs_e(self):
         return self.current_e - self.offset_e
+
     abs_e = property(_get_abs_e)
 
-    def _get_abs_e_multi(self,i):
+    def _get_abs_e_multi(self, i):
         return self.current_e_multi[i] - self.offset_e_multi[i]
+
     abs_e = property(_get_abs_e)
 
     def _get_abs_pos(self):
         return (self.abs_x, self.abs_y, self.abs_z)
+
     abs_pos = property(_get_abs_pos)
 
     def _get_current_pos(self):
         return (self.current_x, self.current_y, self.current_z)
+
     current_pos = property(_get_current_pos)
 
     def _get_home_pos(self):
@@ -210,26 +226,28 @@ class GCode(object):
     def _set_home_pos(self, home_pos):
         if home_pos:
             self.home_x, self.home_y, self.home_z = home_pos
+
     home_pos = property(_get_home_pos, _set_home_pos)
 
     def _get_layers_count(self):
         return len(self.all_zs)
+
     layers_count = property(_get_layers_count)
 
-    def __init__(self, data = None, home_pos = None,
-                 layer_callback = None, deferred = False):
+    def __init__(self, data=None, home_pos=None,
+                 layer_callback=None, deferred=False):
         if not deferred:
             self.prepare(data, home_pos, layer_callback)
 
-    def prepare(self, data = None, home_pos = None, layer_callback = None):
+    def prepare(self, data=None, home_pos=None, layer_callback=None):
         self.home_pos = home_pos
         if data:
             line_class = self.line_class
             self.lines = [line_class(l2) for l2 in
                           (l.strip() for l in data)
                           if l2]
-            self._preprocess(build_layers = True,
-                             layer_callback = layer_callback)
+            self._preprocess(build_layers=True,
+                             layer_callback=layer_callback)
         else:
             self.lines = []
             self.append_layer_id = 0
@@ -288,7 +306,8 @@ class GCode(object):
                 break
         else:
             end_index = i + 1
-        self.layer_idxs = self.layer_idxs[:start_index] + array('I', len(commands) * [layer_idx]) + self.layer_idxs[end_index:]
+        self.layer_idxs = self.layer_idxs[:start_index] + array('I', len(commands) * [layer_idx]) + self.layer_idxs[
+                                                                                                    end_index:]
         self.line_idxs = self.line_idxs[:start_index] + array('I', range(len(commands))) + self.line_idxs[end_index:]
         del self.lines[start_index:end_index]
         del layer[:]
@@ -304,7 +323,7 @@ class GCode(object):
             self.lines.insert(start_index, gline)
         return commands[::-1]
 
-    def append(self, command, store = True):
+    def append(self, command, store=True):
         command = command.strip()
         if not command:
             return
@@ -317,8 +336,8 @@ class GCode(object):
             self.line_idxs.append(len(self.append_layer))
         return gline
 
-    def _preprocess(self, lines = None, build_layers = False,
-                    layer_callback = None):
+    def _preprocess(self, lines=None, build_layers=False,
+                    layer_callback=None):
         """Checks for imperial/relativeness settings and tool changes"""
         if not lines:
             lines = self.lines
@@ -423,16 +442,15 @@ class GCode(object):
                     relative_e = True
                 elif line.command[0] == "T":
                     current_tool = int(line.command[1:])
-                    while(current_tool+1>len(self.current_e_multi)):
-                        self.current_e_multi+=[0]
-                        self.offset_e_multi+=[0]
-                        self.total_e_multi+=[0]
-                        self.max_e_multi+=[0]
+                    while (current_tool + 1 > len(self.current_e_multi)):
+                        self.current_e_multi += [0]
+                        self.offset_e_multi += [0]
+                        self.total_e_multi += [0]
+                        self.max_e_multi += [0]
                 current_e_multi = self.current_e_multi[current_tool]
                 offset_e_multi = self.offset_e_multi[current_tool]
                 total_e_multi = self.total_e_multi[current_tool]
                 max_e_multi = self.max_e_multi[current_tool]
-
 
                 if line.command[0] == "G":
                     parse_coordinates(line, split_raw, imperial)
@@ -499,16 +517,16 @@ class GCode(object):
                             current_e_multi = new_e_multi
 
                         max_e = max(max_e, total_e)
-                        max_e_multi=max(max_e_multi, total_e_multi)
+                        max_e_multi = max(max_e_multi, total_e_multi)
                         cur_layer_has_extrusion |= line.extruding
                     elif line.command == "G92":
                         offset_e = current_e - line.e
                         offset_e_multi = current_e_multi - line.e
 
-                self.current_e_multi[current_tool]=current_e_multi
-                self.offset_e_multi[current_tool]=offset_e_multi
-                self.max_e_multi[current_tool]=max_e_multi
-                self.total_e_multi[current_tool]=total_e_multi
+                self.current_e_multi[current_tool] = current_e_multi
+                self.offset_e_multi[current_tool] = offset_e_multi
+                self.max_e_multi[current_tool] = max_e_multi
+                self.total_e_multi[current_tool] = total_e_multi
 
                 # # Create layers and perform global computations
                 if build_layers:
@@ -571,7 +589,8 @@ class GCode(object):
                             # FIXME: review this better
                             # this looks wrong : there's little chance that the feedrate we'll decelerate to is the previous feedrate
                             # shouldn't we instead look at three consecutive moves ?
-                            distance = 2 * abs(((lastf + f) * (f - lastf) * 0.5) / acceleration)  # multiply by 2 because we have to accelerate and decelerate
+                            distance = 2 * abs(((lastf + f) * (
+                                f - lastf) * 0.5) / acceleration)  # multiply by 2 because we have to accelerate and decelerate
                             if distance <= currenttravel and lastf + f != 0 and f != 0:
                                 moveduration = 2 * distance / (lastf + f)  # This is distance / mean(lastf, f)
                                 moveduration += (currenttravel - distance) / f
@@ -616,9 +635,12 @@ class GCode(object):
                                     zs = sorted([l.z for l in all_layers if l.z is not None])
                                     heights = [round(zs[i + 1] - zs[i], 3) for i in range(len(zs) - 1)]
                                     heights = [height for height in heights if height]
-                                    if len(heights) >= 2: self.est_layer_height = heights[1]
-                                    elif heights: self.est_layer_height = heights[0]
-                                    else: self.est_layer_height = 0.1
+                                    if len(heights) >= 2:
+                                        self.est_layer_height = heights[1]
+                                    elif heights:
+                                        self.est_layer_height = heights[0]
+                                    else:
+                                        self.est_layer_height = 0.1
                                 base_z = round(prev_z - (prev_z % self.est_layer_height), 2)
                             else:
                                 base_z = round(prev_z, 2)
@@ -648,7 +670,7 @@ class GCode(object):
                 line_idxs.append(layer_line)
                 layer_line += 1
                 prev_z = cur_z
-            # ## Loop done
+                # ## Loop done
 
         # Store current status
         self.imperial = imperial
@@ -665,11 +687,10 @@ class GCode(object):
         self.offset_e = offset_e
         self.max_e = max_e
         self.total_e = total_e
-        self.current_e_multi[current_tool]=current_e_multi
-        self.offset_e_multi[current_tool]=offset_e_multi
-        self.max_e_multi[current_tool]=max_e_multi
-        self.total_e_multi[current_tool]=total_e_multi
-
+        self.current_e_multi[current_tool] = current_e_multi
+        self.offset_e_multi[current_tool] = offset_e_multi
+        self.max_e_multi[current_tool] = max_e_multi
+        self.total_e_multi[current_tool] = total_e_multi
 
         # Finalize layers
         if build_layers:
@@ -694,11 +715,10 @@ class GCode(object):
             zmax = max(all_zs)
 
             self.filament_length = self.max_e
-            while len(self.filament_length_multi)<len(self.max_e_multi):
-                    self.filament_length_multi+=[0]
+            while len(self.filament_length_multi) < len(self.max_e_multi):
+                self.filament_length_multi += [0]
             for i in enumerate(self.max_e_multi):
-                self.filament_length_multi[i[0]]=i[1]
-
+                self.filament_length_multi[i[0]] = i[1]
 
             if self.filament_length > 0:
                 self.xmin = xmin_e if not math.isinf(xmin_e) else 0
@@ -717,7 +737,7 @@ class GCode(object):
             self.height = self.zmax - self.zmin
 
             # Finalize duration
-            totaltime = datetime.timedelta(seconds = int(totalduration))
+            totaltime = datetime.timedelta(seconds=int(totalduration))
             self.duration = totaltime
 
     def idxs(self, i):
@@ -726,8 +746,10 @@ class GCode(object):
     def estimate_duration(self):
         return self.layers_count, self.duration
 
+
 class LightGCode(GCode):
     line_class = LightLine
+
 
 def main():
     if len(sys.argv) < 2:
@@ -747,9 +769,10 @@ def main():
     print "\tZ: %0.02f - %0.02f (%0.02f)" % zdims
     print "Filament used: %0.02fmm" % gcode.filament_length
     for i in enumerate(gcode.filament_length_multi):
-        print "E%d %0.02fmm" % (i[0],i[1])
+        print "E%d %0.02fmm" % (i[0], i[1])
     print "Number of layers: %d" % gcode.layers_count
     print "Estimated duration: %s" % gcode.estimate_duration()[1]
+
 
 if __name__ == '__main__':
     main()

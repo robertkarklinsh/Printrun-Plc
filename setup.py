@@ -100,7 +100,7 @@ class uninstall(_install):
 ops = ("install", "build", "sdist", "uninstall", "clean", "build_ext")
 
 if len(sys.argv) < 2 or sys.argv[1] not in ops:
-    print "Please specify operation : %s" % " | ".join(ops)
+    print "Please specify option : %s" % " | ".join(ops)
     raise SystemExit
 
 prefix = None

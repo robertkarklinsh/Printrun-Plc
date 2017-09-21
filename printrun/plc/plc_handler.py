@@ -3,12 +3,14 @@ import logging
 import multiprocessing
 from threading import Timer
 
-from printrun.plc import (ACK, PWR_ON, PWR_OFF, E_LIMIT, E_BUTTON)
+from printrun.plc import (ACK, PWR_UP_REQ, PWR_UP_RESP, PWR_DOWN_REQ, PWR_DOWN_RESP, E_LIMIT, E_BUTTON)
 from printrun.plc.plc_connection import PlcConnection
 from printrun.utils import PlcError
 
-PLC_CHECK_STATUS_TIMEOUT = 5
-PLC_INFO_TIMEOUT = 0.25
+CHECK_STATUS_TIMEOUT = 5
+POWER_UP_TIMEOUT = 5
+POWER_DOWN_TIMEOUT = 5
+INFO_TIMEOUT = 0.25
 
 CONTROLLINO_PORT = '/dev/ttyACM'
 CONTROLLINO_BAUD = 57600
@@ -29,21 +31,29 @@ logger.setLevel(logging.DEBUG)
 #     return wrapped
 
 
-def set_timeout(timeout):
+def set_for_callback(self, timeout, arg=None):
     def wrapper(f):
-        def wrapped(self, *args, **kwargs):
-            timer = wrapped.timer
-            if timer is not None:
-                timer.cancel()
-            wrapped.timer = timer = Timer(timeout, self.on_error, [wrapped.e])
-            timer.start()
-            return f(self, *args, **kwargs)
+        def wrapped(_arg=None, *args, **kwargs):
+            if _arg == wrapped.arg:
+                if wrapped.timer.isAlive():  # or wrapped.arg == args[0]:
+                    try:
+                        wrapped.timer.cancel()
+                    except Exception:
+                        pass
+            return f(_arg, *args, **kwargs)
 
-        wrapped.e = PlcError()
-        wrapped.e.message = 'Could not receive OK signal on %(port)s for %(timeout)s'
-        wrapped.e.timeout = timeout
-        wrapped.timer = None
-        return wrapped
+        if not hasattr(f, 'timer'):
+            wrapped.e = PlcError()
+            wrapped.e.timeout = timeout
+            wrapped.e.message = 'Could not receive ' + str(arg) + ' signal on %(port)s for %(timeout)s seconds'
+            wrapped.arg = arg
+            timer = wrapped.timer = Timer(timeout, self.on_error, [wrapped.e])
+            timer.start()
+            return wrapped
+        f.arg = arg
+        timer = f.timer = Timer(timeout, self.on_error, [f.e])
+        timer.start()
+        return f
 
     return wrapper
 
@@ -61,15 +71,17 @@ class PlcHandler(multiprocessing.Process):
         self.connection.log = self.log
         self.connection.logError = self.logError
         self.connection.logDebug = self.logDebug
-        self.msg_queue = None
+        self.inner_queue = None
 
         self.connected = multiprocessing.Event()
         self.stopped = multiprocessing.Event()
 
         self.msg_handlers = {
             ACK: self.check_status,
-            PWR_ON: self.power_switching,
-            PWR_OFF: self.power_switching,
+            PWR_UP_REQ: self.on_power,
+            PWR_UP_RESP: self.on_power,
+            PWR_DOWN_REQ: self.on_power,
+            PWR_DOWN_RESP: self.on_power,
             E_LIMIT: self.emergency_limit_stop,
             E_BUTTON: None,
         }
@@ -77,13 +89,18 @@ class PlcHandler(multiprocessing.Process):
     def run(self):
 
         if self.connection.open(printer_port=self.printer_port):
-            self.msg_queue = Queue.Queue()
+            self.inner_queue = Queue.Queue()
             self.connected.set()
+            self.check_status = set_for_callback(self, CHECK_STATUS_TIMEOUT, '')(self.check_status)
+            self.update_handlers()
         else:
             return
         while not self.stopped.is_set():
             try:
-                msg = self.msg_queue.get_nowait()
+                if not self.inner_queue.empty():
+                    msg = self.inner_queue.get_nowait()
+                elif self.outer_pipe.poll():
+                    msg = self.outer_pipe[1].recv()
                 if msg is not None:
                     try:
                         if len(msg) > 0:
@@ -96,7 +113,7 @@ class PlcHandler(multiprocessing.Process):
                                      '\n' + 'Error: %s' % ex,
                                      port=self.connection.port)
                         self.on_error(e)
-            except Queue.Empty:
+            except Exception:
                 pass
 
         if self.connected.is_set():
@@ -106,40 +123,63 @@ class PlcHandler(multiprocessing.Process):
             self.connection.close(force=True)
 
     def subscribe(self):
-        return self.outer_pipe[1]
+        return self.outer_pipe[0]
+
+    def update_handlers(self):
+        self.msg_handlers = {
+            ACK: self.check_status,
+            PWR_UP_REQ: self.on_power,
+            PWR_UP_RESP: self.on_power,
+            PWR_DOWN_REQ: self.on_power,
+            PWR_DOWN_RESP: self.on_power,
+            E_LIMIT: self.emergency_limit_stop,
+            E_BUTTON: None,
+        }
 
     def log(self, msg):
-        self.outer_pipe[0].send('l' + msg)
+        self.outer_pipe[1].send('l' + msg)
 
     def logDebug(self, msg):
-        self.outer_pipe[0].send('d' + msg)
+        self.outer_pipe[1].send('d' + msg)
 
     def logError(self, msg):
-        self.outer_pipe[0].send('e' + msg)
+        self.outer_pipe[1].send('e' + msg)
 
     def on_disconnect(self):
         self.connected.clear()
         self.stopped.set()
 
     def on_recv(self, msg):
-        if self.msg_queue is not None:
+        if self.inner_queue is not None:
             try:
-                self.msg_queue.put(msg)
+                self.inner_queue.put(msg)
             except Queue.Full as e:
                 logger.error('Message queue overflow: %s' % e)
 
     def on_error(self, e):
-        self.outer_pipe[0].send('e' + e.message)
+        self.outer_pipe[1].send('e' + e.message)
         pass
 
-    @set_timeout(PLC_CHECK_STATUS_TIMEOUT)
-    def check_status(self, *args):
-        self.log('CONTROLLINO: OK')
-        return True
+    def on_power(self, msg):
+        if msg == PWR_UP_REQ:
+            self.log('POWERING UP...')
+            self.connection.send(msg, True)
+            self.on_power = set_for_callback(POWER_UP_TIMEOUT, PWR_UP_RESP)(self.on_power)
+            self.update_handlers()
+        elif msg == PWR_DOWN_REQ:
+            self.log('POWERING DOWN...')
+            self.connection.send(msg, True)
+            self.on_power = set_for_callback(POWER_DOWN_TIMEOUT, PWR_DOWN_RESP)(self.on_power)
+        elif msg == PWR_UP_RESP:
+            self.log('RECV: POWER UP')
+        elif msg == PWR_DOWN_RESP:
+            self.log('RECV: POWER DOWN')
 
-    def power_switching(self, msg):
-        # write power status to console
-        raise NotImplementedError
+    def check_status(self, msg=''):
+        self.log('CONTROLLINO: OK')
+        self.check_status = set_for_callback(self, CHECK_STATUS_TIMEOUT, msg)(self.check_status)
+        self.update_handlers()
+        return True
 
     def emergency_limit_stop(self, msg):
         raise NotImplementedError
