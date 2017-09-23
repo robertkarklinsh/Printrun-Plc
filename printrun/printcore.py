@@ -216,7 +216,7 @@ class PrintCore():
                 self.printer_tcp.settimeout(1.0)
                 try:
                     self.printer_tcp.connect((hostname, port))
-                    self.printer_tcp.settimeout(1.0)
+                    self.printer_tcp.settimeout(10.0)
                     self.printer = self.printer_tcp.makefile()
                 except socket.error as e:
                     if (e.strerror is None):

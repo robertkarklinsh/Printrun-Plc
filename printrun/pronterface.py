@@ -172,6 +172,7 @@ class PronterWindow(MainWindow, pronsole.Pronsole):
         self.slicep = None
         self.current_pos = [0, 0, 0]
         self.paused = False
+        self.paused_lock = threading.Condition()
         self.uploading = False
         self.sentglines = Queue.Queue(0)
         self.cpbuttons = {
@@ -1334,6 +1335,7 @@ Printrun. If not, see <http://www.gnu.org/licenses/>."""
         self.uploading = False
 
     def pause(self, event=None):
+        self.paused_lock.acquire()
         if not self.paused:
             self.log(_("Print paused at: %s") % format_time(time.time()))
             if self.settings.display_progress_on_printer:
@@ -1343,10 +1345,14 @@ Printrun. If not, see <http://www.gnu.org/licenses/>."""
                 self.p.send_now("M25")
             else:
                 if not self.p.printing:
+                    self.paused_lock.notify_all()
+                    self.paused_lock.release()
                     return
                 self.p.pause()
                 self.p.runSmallScript(self.pauseScript)
             self.paused = True
+            self.paused_lock.notify_all()
+            self.paused_lock.release()
             # self.p.runSmallScript(self.pauseScript)
             self.extra_print_time += int(time.time() - self.starttime)
             wx.CallAfter(self.pausebtn.SetLabel, _("Resume"))
@@ -1357,6 +1363,8 @@ Printrun. If not, see <http://www.gnu.org/licenses/>."""
                 printer_progress_string = "M117 Resuming"
                 self.p.send_now(printer_progress_string)
             self.paused = False
+            self.paused_lock.notify_all()
+            self.paused_lock.release()
             if self.sdprinting:
                 self.p.send_now("M24")
             else:
@@ -1900,8 +1908,13 @@ Printrun. If not, see <http://www.gnu.org/licenses/>."""
 
     def recvcb_actions(self, l):
         if l.startswith("!!"):
+            self.paused_lock.acquire()
             if not self.paused:
                 wx.CallAfter(self.pause)
+                self.paused_lock.wait()
+                self.paused_lock.release()
+            else:
+                self.paused_lock.release()
             msg = l.split(" ", 1)
             if len(msg) > 1 and not self.p.loud:
                 wx.CallAfter(self.addtexttolog, msg[1] + "\n")
