@@ -31,6 +31,7 @@ import time
 import traceback
 
 from plc.plc_handler import PlcHandler
+from plc import *
 from printrun import gcoder
 from printrun import spoolmanager
 from serial import SerialException
@@ -133,11 +134,12 @@ class Pronsole(cmd.Cmd):
         self.p.onlinecb = self.online
         self.p.errorcb = self.logError
 
-        # Handles all communication with PLC.
+        # Plc instance. Handles all communication with plc.
         self.plc = None
         self.plc_pipe = None
         self.plc_thread = None
         self.listen_to_plc = False
+        self.plc_listen_interval = 1
 
         self.status = Status()
         self.dynamic_temp = False
@@ -402,6 +404,8 @@ class Pronsole(cmd.Cmd):
             if self.p and self.p.online:
                 if not self.p.loud:
                     self.log("SENDING:" + l[1:])
+                if l[1:].startswith("reset") and self.plc is not None:
+                    self.plc_pipe.send(STOP + REQ)
                 self.p.send_now(l[1:])
             else:
                 self.logError(("Printer is not online."))
@@ -966,20 +970,20 @@ class Pronsole(cmd.Cmd):
                 msg = self.plc_pipe.recv()
                 if msg[0] == 'e':
                     self.logError(msg[1:])
-                if msg[0] == 'l':
+                elif msg[0] == 'l':
+                    self.log(msg[1:])
+                elif msg[0] == 'd':
                     if self.p.loud:
                         self.log(msg[1:])
-                # # Uncomment this to see debug messages
-                # if msg[0] == 'd':
-                #     self.log(msg[1:])
+
             cur_time = time.time()
             wait_time = 0
-            while time.time() < cur_time + self.monitor_interval - 0.25:
+            while time.time() < cur_time + self.plc_listen_interval - 0.25:
                 time.sleep(0.25)
                 # Safeguard: if system time changes and goes back in the past,
                 # we could get stuck almost forever
                 wait_time += 0.25
-                if wait_time > self.monitor_interval - 0.25:
+                if wait_time > self.plc_listen_interval - 0.25:
                     break
             # Always sleep at least a bit, if something goes wrong with the
             # system time we'll avoid freezing the whole app this way
@@ -1187,8 +1191,41 @@ class Pronsole(cmd.Cmd):
         if self.sdprinting:
             self.p.send_now("M24")
             return
+        # elif self.plc is not None:
+        #     self.plc_pipe.send(CONTINUE + REQ)
         else:
             self.p.resume()
+
+    # Send [suspend] command to plc which pauses the print bypassing pronterface command queue
+    # Note that print wouldn't be paused immediately as smoothie waits the receive buffer to empty
+    def do_suspend(self, l):
+        if self.plc is None:
+            self.logError('Plc is not connected. Connect plc first.')
+            return
+        else:
+            self.plc_pipe.send(SUSPEND + REQ)
+
+    # Send [stop] command to plc which immediately aborts the print bypassing pronterface command queue
+    def do_stop(self, l):
+        if self.plc is None:
+            self.logError('Plc is not connected. Connect plc first.')
+            return
+        else:
+            self.plc_pipe.send(STOP + REQ)
+
+    def do_continue(self, l):
+        if self.plc is None:
+            self.logError('Plc is not connected. Connect plc first.')
+            return
+        else:
+            self.plc_pipe.send(CONTINUE + REQ)
+
+    def do_enable(self, l):
+        if self.plc is None:
+            self.logError('Plc is not connected. Connect plc first.')
+            return
+        else:
+            self.plc_pipe.send(ENABLE + REQ)
 
     def help_resume(self):
         self.log(("Resumes a paused print."))
@@ -1284,6 +1321,24 @@ class Pronsole(cmd.Cmd):
                 time.sleep(0.1)
         if (len(line.split()) == 2 and line[-1] != " ") or (len(line.split()) == 1 and line[-1] == " "):
             return [i for i in self.sdfiles if i.startswith(text)]
+
+    # ---------------------------------------------------------------
+    # Printer control
+    # ---------------------------------------------------------------
+
+    def do_poweron(self, l):
+        if self.plc is None:
+            self.logError('Plc is not connected. Connect plc first.')
+            return
+        else:
+            self.plc_pipe.send(PWR_UP + REQ)
+
+    def do_poweroff(self, l):
+        if self.plc is None:
+            self.logError('Plc is not connected. Connect plc first.')
+            return
+        else:
+            self.plc_pipe.send(PWR_DOWN + REQ)
 
     # --------------------------------------------------------------
     #  Printcore callbacks

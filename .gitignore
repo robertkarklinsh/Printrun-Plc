@@ -1,3 +1,5 @@
+*.gcode
+*.pkl
 *.pyc
 .pronsolerc
 *.swp

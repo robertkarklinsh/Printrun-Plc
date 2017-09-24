@@ -104,6 +104,8 @@ class PlcConnection(object):
 
     def send(self, command):
         try:
+            if command[len(command) - 1] != '\n':
+                command += '\n'
             self.command_queue.put(command, timeout=self.timeout)
             if self.send_thread is None:
                 self.send_thread = threading.Thread(target=self._send, name='send_thread')
@@ -156,7 +158,7 @@ class PlcConnection(object):
                     # self.log('Received message from %s: ' % self.port +
                     #          '\n' + msg)
                     # time.sleep(0.1)
-                    self.on_recv(msg.rstrip())
+                    self.on_recv(msg.rstrip(' \n'))
             except PlcError as e:
                 self.logError('PlcCommunicationError on %s:' % self.port +
                               '\n' + e.message)

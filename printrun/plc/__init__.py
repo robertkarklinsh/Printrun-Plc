@@ -1,15 +1,19 @@
-# PlcHandler <-> Plc communication protocol
+# Pronterface <-> PlcHandler <-> Plc communication protocol
 ACK = '\x06'
 SYN = '\x16'
 EOT = '\x04'
-PWR_UP_REQ = 'POWERUP'
-PWR_UP_RESP = '\x12'
-PWR_DOWN_REQ = '\x13'
-PWR_DOWN_RESP = '\x14'
 E_LIMIT = '\xff'
 E_BUTTON = '\xf0'
-
-# PlcHandler <-> Pronsole channels
+M999 = "\x0f"
+HALT = "\x21\x21"
+REQ = '\x12'
+RESP = '\x13'
+PWR_UP = '\x14'
+PWR_DOWN = '\x15'
+SUSPEND = '\x17'
+CONTINUE = '\x18'
+STOP = '\x19'
+ENABLE = '\x20'
 LOG = 'l'
 ERR = 'e'
 ACT = 'a'

@@ -3,11 +3,13 @@ import logging
 import multiprocessing
 from threading import Timer
 
-from printrun.plc import (ACK, PWR_UP_REQ, PWR_UP_RESP, PWR_DOWN_REQ, PWR_DOWN_RESP, E_LIMIT, E_BUTTON)
+from printrun.plc import *
 from printrun.plc.plc_connection import PlcConnection
 from printrun.utils import PlcError
 
 CHECK_STATUS_TIMEOUT = 5
+SUSPEND_TIMEOUT = 1
+STOP_TIMEOUT = 0.1
 POWER_UP_TIMEOUT = 5
 POWER_DOWN_TIMEOUT = 5
 INFO_TIMEOUT = 0.25
@@ -45,7 +47,7 @@ def set_for_callback(self, timeout, arg=None):
         if not hasattr(f, 'timer'):
             wrapped.e = PlcError()
             wrapped.e.timeout = timeout
-            wrapped.e.message = 'Could not receive ' + str(arg) + ' signal on %(port)s for %(timeout)s seconds'
+            wrapped.e.message = 'Could not receive response signal on %(port)s for %(timeout)s seconds'
             wrapped.arg = arg
             timer = wrapped.timer = Timer(timeout, self.on_error, [wrapped.e])
             timer.start()
@@ -78,12 +80,14 @@ class PlcHandler(multiprocessing.Process):
 
         self.msg_handlers = {
             ACK: self.check_status,
-            PWR_UP_REQ: self.on_power,
-            PWR_UP_RESP: self.on_power,
-            PWR_DOWN_REQ: self.on_power,
-            PWR_DOWN_RESP: self.on_power,
             E_LIMIT: self.emergency_limit_stop,
             E_BUTTON: None,
+            PWR_UP: self.on_power_up,
+            PWR_DOWN: self.on_power_down,
+            SUSPEND: self.on_suspend,
+            CONTINUE: self.on_continue,
+            STOP: self.on_stop,
+            ENABLE: self.on_enable
         }
 
     def run(self):
@@ -91,19 +95,21 @@ class PlcHandler(multiprocessing.Process):
         if self.connection.open(printer_port=self.printer_port):
             self.inner_queue = Queue.Queue()
             self.connected.set()
-            self.check_status = set_for_callback(self, CHECK_STATUS_TIMEOUT, '')(self.check_status)
+            self.check_status = set_for_callback(self, CHECK_STATUS_TIMEOUT)(self.check_status)
             self.update_handlers()
         else:
             return
         while not self.stopped.is_set():
             try:
-                if not self.inner_queue.empty():
-                    msg = self.inner_queue.get_nowait()
-                elif self.outer_pipe.poll():
+                if self.outer_pipe[1].poll():
                     msg = self.outer_pipe[1].recv()
+                elif not self.inner_queue.empty():
+                    msg = self.inner_queue.get_nowait()
+                else:
+                    msg = None
                 if msg is not None:
                     try:
-                        if len(msg) > 0:
+                        if len(msg) > 1:
                             self.msg_handlers[msg[0]](msg[1:])
                         else:
                             self.msg_handlers[msg[0]]()
@@ -128,12 +134,14 @@ class PlcHandler(multiprocessing.Process):
     def update_handlers(self):
         self.msg_handlers = {
             ACK: self.check_status,
-            PWR_UP_REQ: self.on_power,
-            PWR_UP_RESP: self.on_power,
-            PWR_DOWN_REQ: self.on_power,
-            PWR_DOWN_RESP: self.on_power,
             E_LIMIT: self.emergency_limit_stop,
             E_BUTTON: None,
+            PWR_UP: self.on_power_up,
+            PWR_DOWN: self.on_power_down,
+            SUSPEND: self.on_suspend,
+            CONTINUE: self.on_continue,
+            STOP: self.on_stop,
+            ENABLE: self.on_enable
         }
 
     def log(self, msg):
@@ -160,23 +168,62 @@ class PlcHandler(multiprocessing.Process):
         self.outer_pipe[1].send('e' + e.message)
         pass
 
-    def on_power(self, msg):
-        if msg == PWR_UP_REQ:
-            self.log('POWERING UP...')
-            self.connection.send(msg, True)
-            self.on_power = set_for_callback(POWER_UP_TIMEOUT, PWR_UP_RESP)(self.on_power)
+    def on_power_up(self, msg=None):
+        if msg[0] == REQ:
+            self.log('Powering up...')
+            self.connection.send(PWR_UP)
+            self.on_power_up = set_for_callback(self, POWER_UP_TIMEOUT, RESP)(self.on_power_up)
             self.update_handlers()
-        elif msg == PWR_DOWN_REQ:
-            self.log('POWERING DOWN...')
-            self.connection.send(msg, True)
-            self.on_power = set_for_callback(POWER_DOWN_TIMEOUT, PWR_DOWN_RESP)(self.on_power)
-        elif msg == PWR_UP_RESP:
-            self.log('RECV: POWER UP')
-        elif msg == PWR_DOWN_RESP:
-            self.log('RECV: POWER DOWN')
+        elif msg[0] == RESP:
+            self.log('RECV: power up')
 
-    def check_status(self, msg=''):
-        self.log('CONTROLLINO: OK')
+    def on_power_down(self, msg=None):
+        if msg[0] == REQ:
+            self.log('Powering down...')
+            self.connection.send(PWR_DOWN)
+            self.on_power_down = set_for_callback(self, POWER_DOWN_TIMEOUT, RESP)(self.on_power_down)
+            self.update_handlers()
+        elif msg[0] == RESP:
+            self.log('RECV: power down')
+
+    def on_suspend(self, msg=None):
+        if msg[0] == REQ:
+            self.log('Suspending print...')
+            self.connection.send(SUSPEND)
+            self.on_suspend = set_for_callback(self, SUSPEND_TIMEOUT, RESP)(self.on_suspend)
+            self.update_handlers()
+        if msg[0] == RESP:
+            self.logDebug('RECV: print suspended')
+
+    def on_continue(self, msg=None):
+        if msg[0] == REQ:
+            self.log('Continuing print...')
+            self.connection.send(CONTINUE)
+            self.on_continue = set_for_callback(self, SUSPEND_TIMEOUT, RESP)(self.on_continue)
+            self.update_handlers()
+        if msg[0] == RESP:
+            self.logDebug('RECV: print continued')
+
+    def on_stop(self, msg=None):
+        if msg[0] == REQ:
+            self.log('Stopping printer...')
+            self.connection.send(STOP)
+            self.on_stop = set_for_callback(self, STOP_TIMEOUT, RESP)(self.on_stop)
+            self.update_handlers()
+        if msg[0] == RESP:
+            self.logDebug('RECV: printer stopped')
+
+    def on_enable(self, msg=None):
+        if msg[0] == REQ:
+            self.log('Enabling printer...')
+            self.connection.send(ENABLE)
+            self.on_enable = set_for_callback(self, STOP_TIMEOUT, RESP)(self.on_enable)
+            self.update_handlers()
+        if msg[0] == RESP:
+            self.logDebug('RECV: printer enabled')
+
+    def check_status(self, msg=None):
+        self.logDebug('RECV: plc is ok')
         self.check_status = set_for_callback(self, CHECK_STATUS_TIMEOUT, msg)(self.check_status)
         self.update_handlers()
         return True
