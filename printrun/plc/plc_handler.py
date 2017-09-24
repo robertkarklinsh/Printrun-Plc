@@ -226,14 +226,14 @@ class PlcHandler(multiprocessing.Process):
     def check_status(self, msg=None):
         if msg is None:
             self.logDebug('RECV: plc is ok')
-        elif msg[0:2] == HALT:
+        elif msg[0] == HALT:
             self.logDebug('RECV: plc in halt state')
         self.check_status = set_for_callback(self, CHECK_STATUS_TIMEOUT)(self.check_status)
         self.update_handlers()
         return True
 
-    def on_e_limits(self, msg):
+    def on_e_limits(self, msg=None):
         self.log('Emergency limit activated!')
 
-    def on_e_button(self, msg):
+    def on_e_button(self, msg=None):
         self.log('Emergency button pressed!')
