@@ -36,7 +36,7 @@ logger.setLevel(logging.DEBUG)
 def set_for_callback(self, timeout, arg=None):
     def wrapper(f):
         def wrapped(_arg=None, *args, **kwargs):
-            if _arg == wrapped.arg:
+            if wrapped.arg is None or _arg == wrapped.arg:
                 if wrapped.timer.isAlive():  # or wrapped.arg == args[0]:
                     try:
                         wrapped.timer.cancel()
@@ -80,6 +80,7 @@ class PlcHandler(multiprocessing.Process):
 
         self.msg_handlers = {
             ACK: self.check_status,
+            HALT: self.check_status,
             E_LIMIT: self.on_e_limits,
             E_BUTTON: self.on_e_button,
             PWR_UP: self.on_power_up,
@@ -133,6 +134,7 @@ class PlcHandler(multiprocessing.Process):
     def update_handlers(self):
         self.msg_handlers = {
             ACK: self.check_status,
+            HALT: self.check_status,
             E_LIMIT: self.on_e_limits,
             E_BUTTON: self.on_e_button,
             PWR_UP: self.on_power_up,
@@ -222,8 +224,11 @@ class PlcHandler(multiprocessing.Process):
             self.logDebug('RECV: printer enabled')
 
     def check_status(self, msg=None):
-        self.logDebug('RECV: plc is ok')
-        self.check_status = set_for_callback(self, CHECK_STATUS_TIMEOUT, msg)(self.check_status)
+        if msg is None:
+            self.logDebug('RECV: plc is ok')
+        elif msg[0:2] == HALT:
+            self.logDebug('RECV: plc in halt state')
+        self.check_status = set_for_callback(self, CHECK_STATUS_TIMEOUT)(self.check_status)
         self.update_handlers()
         return True
 
