@@ -114,8 +114,7 @@ class PlcHandler(multiprocessing.Process):
                         else:
                             self.msg_handlers[msg[0]]()
                     except Exception as ex:
-                        e = PlcError('Received corrupted message: ' + msg +
-                                     'on %(port)s, check connection' +
+                        e = PlcError('Received corrupted message on %(port)s, check connection' +
                                      '\n' + 'Error: %s' % ex,
                                      port=self.connection.port)
                         self.on_error(e)
