@@ -80,8 +80,8 @@ class PlcHandler(multiprocessing.Process):
 
         self.msg_handlers = {
             ACK: self.check_status,
-            E_LIMIT: self.emergency_limit_stop,
-            E_BUTTON: None,
+            E_LIMIT: self.on_e_limits,
+            E_BUTTON: self.on_e_button,
             PWR_UP: self.on_power_up,
             PWR_DOWN: self.on_power_down,
             SUSPEND: self.on_suspend,
@@ -134,8 +134,8 @@ class PlcHandler(multiprocessing.Process):
     def update_handlers(self):
         self.msg_handlers = {
             ACK: self.check_status,
-            E_LIMIT: self.emergency_limit_stop,
-            E_BUTTON: None,
+            E_LIMIT: self.on_e_limits,
+            E_BUTTON: self.on_e_button,
             PWR_UP: self.on_power_up,
             PWR_DOWN: self.on_power_down,
             SUSPEND: self.on_suspend,
@@ -228,5 +228,8 @@ class PlcHandler(multiprocessing.Process):
         self.update_handlers()
         return True
 
-    def emergency_limit_stop(self, msg):
-        raise NotImplementedError
+    def on_e_limits(self, msg):
+        self.log('Emergency limit activated!')
+
+    def on_e_button(self, msg):
+        self.log('Emergency button pressed!')
