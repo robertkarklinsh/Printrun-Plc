@@ -1203,6 +1203,12 @@ class Pronsole(cmd.Cmd):
             self.logError('Plc is not connected. Connect plc first.')
             return
         else:
+            if not self.p.printing:
+                self.logError(("Not printing, cannot pause."))
+                # Do not return for debugging
+            else:
+                self.p.pause()
+                self.paused = True
             self.plc_pipe.send(SUSPEND + REQ)
 
     # Send [stop] command to plc which immediately aborts the print bypassing pronterface command queue
