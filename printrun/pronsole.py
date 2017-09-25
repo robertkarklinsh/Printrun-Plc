@@ -1209,6 +1209,7 @@ class Pronsole(cmd.Cmd):
             else:
                 self.p.pause()
                 self.paused = True
+            time.sleep(1)
             self.plc_pipe.send(SUSPEND + REQ)
 
     # Send [stop] command to plc which immediately aborts the print bypassing pronterface command queue
