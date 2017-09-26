@@ -21,43 +21,58 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 
 
-# def allow_subscription(f):
-#     def wrapped(*args, **kwargs):
-#         if wrapped.callbacks is None:
-#             return f(*args, **kwargs)
-#         else:
-#             for callback in wrapped.callbacks:
-#                 callback(f(*args, **kwargs))
-#
-#     wrapped.callbacks = []
-#     return wrapped
-
-
-def set_for_callback(self, timeout, arg=None):
+# Set callback to fire with (*callback_args[0], **callback_args[1]) if wrapped function isn't called with
+# (*wrapped_args[0], **wrapped_args[1]) for timeout
+def set_callback(callback=None, timeout=None, wrapped_args=((), {}), callback_args=((), {})):
     def wrapper(f):
-        def wrapped(_arg=None, *args, **kwargs):
-            if wrapped.arg is None or _arg == wrapped.arg:
-                if wrapped.timer.isAlive():  # or wrapped.arg == args[0]:
+        if hasattr(f, 'timer'):
+            f.callback = callback
+            f.timeout = timeout
+            f.args = wrapped_args
+            f.callback_args = callback_args
+
+            f.timer = Timer(timeout, callback, args=callback_args[0], kwargs=callback_args[1])
+            return f
+
+        def wrapped(*_args, **_kwargs):
+            if not wrapped.args[0] and not wrapped.args[1]:
+                if wrapped.timer.isAlive():
                     try:
                         wrapped.timer.cancel()
                     except Exception:
                         pass
-            return f(_arg, *args, **kwargs)
+                return f(*_args, **_kwargs)
+            if wrapped.args[0]:
+                if _args == wrapped.args[0]:
+                    if wrapped.timer.isAlive():
+                        try:
+                            wrapped.timer.cancel()
+                        except Exception:
+                            pass
+            else:
+                if _kwargs == wrapped.args[1]:
+                    if wrapped.timer.isAlive():
+                        try:
+                            wrapped.timer.cancel()
+                        except Exception:
+                            pass
+            return f(*_args, **_kwargs)
 
-        if not hasattr(f, 'timer'):
-            wrapped.e = PlcError()
-            wrapped.e.timeout = timeout
-            wrapped.e.message = 'Could not receive response signal on %(port)s for %(timeout)s seconds'
-            wrapped.arg = arg
-            timer = wrapped.timer = Timer(timeout, self.on_error, [wrapped.e])
-            timer.start()
-            return wrapped
-        f.arg = arg
-        timer = f.timer = Timer(timeout, self.on_error, [f.e])
-        timer.start()
-        return f
+        wrapped.callback = callback
+        wrapped.timeout = timeout
+        wrapped.args = wrapped_args
+        wrapped.callback_args = callback_args
+
+        wrapped.timer = Timer(timeout, callback, args=callback_args[0], kwargs=callback_args[1])
+        return wrapped
 
     return wrapper
+
+
+def update_timer(f):
+    if hasattr(f, 'timer'):
+        timer = f.timer = Timer(f.timeout, f.callback, args=f.callback_args[0], kwargs=f.callback_args[1])
+        timer.start()
 
 
 class PlcHandler(multiprocessing.Process):
@@ -65,7 +80,6 @@ class PlcHandler(multiprocessing.Process):
         multiprocessing.Process.__init__(self)
 
         self.outer_pipe = multiprocessing.Pipe()
-
         self.connection = PlcConnection()
         self.printer_port = printer_port
         self.connection.on_recv = self.on_recv
@@ -78,28 +92,121 @@ class PlcHandler(multiprocessing.Process):
         self.connected = multiprocessing.Event()
         self.stopped = multiprocessing.Event()
 
-        self.msg_handlers = {
-            ACK: self.check_status,
-            HALT: self.check_status,
-            E_LIMIT: self.on_e_limits,
-            E_BUTTON: self.on_e_button,
-            PWR_UP: self.on_power_up,
-            PWR_DOWN: self.on_power_down,
-            SUSPEND: self.on_suspend,
-            CONTINUE: self.on_continue,
-            STOP: self.on_stop,
-            ENABLE: self.on_enable
-        }
-
     def run(self):
+
+        @set_callback()
+        def check_status(msg=None):
+            if msg is None:
+                self.logDebug('RECV:PLC: ok')
+            elif msg == HALT:
+                self.logDebug('RECV:PLC: !!')
+            update_timer(check_status)
+            return True
+
+        @set_callback()
+        def on_power_up(context, msg=None):
+            if context == REQ:
+                self.log('Powering up...')
+                self.connection.send(PWR_UP)
+                set_callback(self.on_error, POWER_UP_TIMEOUT, wrapped_args=((RESP,), {}), callback_args=((
+                                                                                                             'Could not receive response for poweron for %s' % POWER_UP_TIMEOUT,),
+                                                                                                         {}))(
+                    on_power_up)
+                on_power_up.timer.start()
+                # self.update_handlers()
+            elif context == RESP:
+                self.log('RECV: Power is ON!')
+
+        @set_callback()
+        def on_power_down(context, msg=None):
+            if context == REQ:
+                self.log('Powering down...')
+                self.connection.send(PWR_DOWN)
+                set_callback(self.on_error, POWER_DOWN_TIMEOUT, wrapped_args=((RESP,), {}), callback_args=(
+                    (
+                        'Could not receive response for poweroff for %s' % POWER_DOWN_TIMEOUT,),
+                    {}))(on_power_down)
+
+            elif context == RESP:
+                self.log('RECV: Power is OFF!')
+
+        @set_callback()
+        def on_suspend(context, msg=None):
+            if context == REQ:
+                self.logDebug('Suspending print...')
+                self.connection.send(SUSPEND)
+                set_callback(self.on_error, SUSPEND_TIMEOUT, wrapped_args=((RESP,), {}), callback_args=((
+                                                                                                            'Could not receive response for suspend for %s' % SUSPEND_TIMEOUT,),
+                                                                                                        {}))(
+                    on_suspend)
+            elif context == RESP:
+                self.logDebug('RECV:PLC: Print suspended')
+
+        @set_callback()
+        def on_continue(context, msg=None):
+            if context == REQ:
+                self.logDebug('Continuing print...')
+                self.connection.send(CONTINUE)
+                set_callback(self.on_error, POWER_DOWN_TIMEOUT, wrapped_args=((RESP,), {}), callback_args=((
+                                                                                                               'Could not receive response for continue for %s' % SUSPEND_TIMEOUT,),
+                                                                                                           {}))(
+                    on_continue)
+            if context == RESP:
+                self.logDebug('RECV:PLC: Print continued')
+
+        @set_callback()
+        def on_stop(context, msg=None):
+            if context == REQ:
+                self.logDebug('Stopping printer...')
+                self.connection.send(STOP)
+                set_callback(self.on_error, STOP_TIMEOUT, wrapped_args=((RESP,), {}), callback_args=((
+                                                                                                         'Could not receive response for stop for %s' % STOP_TIMEOUT,),
+                                                                                                     {}))(
+                    on_stop)
+            if context == RESP:
+                self.logDebug('RECV:PLC: Printer stopped')
+
+        @set_callback()
+        def on_enable(context, msg=None):
+            if context == REQ:
+                self.logDebug('Enabling printer...')
+                self.connection.send(ENABLE)
+                set_callback(self.on_error, STOP_TIMEOUT, wrapped_args=((RESP,), {}), callback_args=((
+                                                                                                         'Could not receive response for enable for %s' % STOP_TIMEOUT,),
+                                                                                                     {}))(
+                    on_enable)
+            if context == RESP:
+                self.logDebug('RECV:PLC: Printer enabled')
+
+        def on_e_limits(msg=None):
+            self.log('RECV: Emergency limit activated!')
+
+        def on_e_button(msg=None):
+            self.log('RECV: Emergency button pressed!')
 
         if self.connection.open(printer_port=self.printer_port):
             self.inner_queue = Queue.Queue()
             self.connected.set()
-            self.check_status = set_for_callback(self, CHECK_STATUS_TIMEOUT)(self.check_status)
-            self.update_handlers()
+            set_callback(self.on_error, CHECK_STATUS_TIMEOUT, callback_args=(
+                ('Plc not responding on %(port)s',),
+                {}))(check_status)
+            check_status.timer.start()
         else:
             return
+
+        msg_handlers = {
+            ACK: check_status,
+            HALT: check_status,
+            E_LIMIT: on_e_limits,
+            E_BUTTON: on_e_button,
+            PWR_UP: on_power_up,
+            PWR_DOWN: on_power_down,
+            SUSPEND: on_suspend,
+            CONTINUE: on_continue,
+            STOP: on_stop,
+            ENABLE: on_enable
+        }
+
         while not self.stopped.is_set():
             try:
                 if self.outer_pipe[1].poll():
@@ -110,10 +217,12 @@ class PlcHandler(multiprocessing.Process):
                     msg = None
                 if msg is not None:
                     try:
-                        if len(msg) > 1:
-                            self.msg_handlers[msg[0]](msg[1:])
+                        if len(msg) > 2:
+                            msg_handlers[msg[0]](msg[1], msg[2:])
+                        elif len(msg) > 1:
+                            msg_handlers[msg[0]](msg[1])
                         else:
-                            self.msg_handlers[msg[0]]()
+                            msg_handlers[msg]()
                     except Exception as ex:
                         e = PlcError('Received corrupted message on %(port)s, check connection' +
                                      '\n' + 'Error: %s' % ex,
@@ -130,20 +239,6 @@ class PlcHandler(multiprocessing.Process):
 
     def subscribe(self):
         return self.outer_pipe[0]
-
-    def update_handlers(self):
-        self.msg_handlers = {
-            ACK: self.check_status,
-            HALT: self.check_status,
-            E_LIMIT: self.on_e_limits,
-            E_BUTTON: self.on_e_button,
-            PWR_UP: self.on_power_up,
-            PWR_DOWN: self.on_power_down,
-            SUSPEND: self.on_suspend,
-            CONTINUE: self.on_continue,
-            STOP: self.on_stop,
-            ENABLE: self.on_enable
-        }
 
     def log(self, msg):
         self.outer_pipe[1].send('l' + msg)
@@ -163,77 +258,13 @@ class PlcHandler(multiprocessing.Process):
             try:
                 self.inner_queue.put(msg)
             except Queue.Full as e:
-                logger.error('Message queue overflow: %s' % e)
+                self.logError('Message queue overflow: %s' % e)
 
-    def on_error(self, e):
+    def on_error(self, msg, **kwargs):
+        e = PlcError()
+        e.message = msg
+        if self.connected.is_set():
+            e.port = self.connection.port
+        for kw in kwargs:
+            e.__setattr__(kw, kwargs[kw])
         self.outer_pipe[1].send('e' + e.message)
-        pass
-
-    def on_power_up(self, msg=None):
-        if msg[0] == REQ:
-            self.log('Powering up...')
-            self.connection.send(PWR_UP)
-            self.on_power_up = set_for_callback(self, POWER_UP_TIMEOUT, RESP)(self.on_power_up)
-            self.update_handlers()
-        elif msg[0] == RESP:
-            self.log('RECV: power up')
-
-    def on_power_down(self, msg=None):
-        if msg[0] == REQ:
-            self.log('Powering down...')
-            self.connection.send(PWR_DOWN)
-            self.on_power_down = set_for_callback(self, POWER_DOWN_TIMEOUT, RESP)(self.on_power_down)
-            self.update_handlers()
-        elif msg[0] == RESP:
-            self.log('RECV: power down')
-
-    def on_suspend(self, msg=None):
-        if msg[0] == REQ:
-            self.log('Suspending print...')
-            self.connection.send(SUSPEND)
-            self.on_suspend = set_for_callback(self, SUSPEND_TIMEOUT, RESP)(self.on_suspend)
-            self.update_handlers()
-        if msg[0] == RESP:
-            self.logDebug('RECV: print suspended')
-
-    def on_continue(self, msg=None):
-        if msg[0] == REQ:
-            self.log('Continuing print...')
-            self.connection.send(CONTINUE)
-            self.on_continue = set_for_callback(self, SUSPEND_TIMEOUT, RESP)(self.on_continue)
-            self.update_handlers()
-        if msg[0] == RESP:
-            self.logDebug('RECV: print continued')
-
-    def on_stop(self, msg=None):
-        if msg[0] == REQ:
-            self.log('Stopping printer...')
-            self.connection.send(STOP)
-            self.on_stop = set_for_callback(self, STOP_TIMEOUT, RESP)(self.on_stop)
-            self.update_handlers()
-        if msg[0] == RESP:
-            self.logDebug('RECV: printer stopped')
-
-    def on_enable(self, msg=None):
-        if msg[0] == REQ:
-            self.log('Enabling printer...')
-            self.connection.send(ENABLE)
-            self.on_enable = set_for_callback(self, STOP_TIMEOUT, RESP)(self.on_enable)
-            self.update_handlers()
-        if msg[0] == RESP:
-            self.logDebug('RECV: printer enabled')
-
-    def check_status(self, msg=None):
-        if msg is None:
-            self.logDebug('RECV: plc is ok')
-        elif msg[0] == HALT:
-            self.logDebug('RECV: plc in halt state')
-        self.check_status = set_for_callback(self, CHECK_STATUS_TIMEOUT)(self.check_status)
-        self.update_handlers()
-        return True
-
-    def on_e_limits(self, msg=None):
-        self.log('Emergency limit activated!')
-
-    def on_e_button(self, msg=None):
-        self.log('Emergency button pressed!')

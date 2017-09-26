@@ -1,6 +1,6 @@
 from gcoder import LightGCode
 import serial
-from plc.plc_handler import set_for_callback
+from plc.plc_handler import set_callback
 import time
 import multiprocessing
 

@@ -31,6 +31,9 @@ try:
 except ImportError:
     import json
 
+from plc.plc_handler import (set_callback, update_timer)
+from plc import (SUSPEND, REQ)
+
 from . import pronsole
 from . import printcore
 from printrun import spoolmanager
@@ -57,6 +60,9 @@ if os.name == "nt":
 
 pronterface_quitting = False
 
+# Fix @2: When no 'ok' response for this timeout pronterface sends suspend command
+SMOOTHIE_BUFFER_TIMEOUT = 5
+
 
 class PronterfaceQuitException(Exception):
     pass
@@ -67,7 +73,6 @@ from .settings import wxSetting, HiddenSetting, StringSetting, SpinSetting, \
     FloatSpinSetting, BooleanSetting, StaticTextSetting
 from printrun import gcoder
 from .pronsole import REPORT_NONE, REPORT_POS, REPORT_TEMP, REPORT_MANUAL
-
 
 class ConsoleOutputHandler(object):
     """Handle console output. All messages go through the logging submodule. We setup a logging handler to get logged
@@ -1371,6 +1376,24 @@ Printrun. If not, see <http://www.gnu.org/licenses/>."""
                 self.p.resume()
             wx.CallAfter(self.pausebtn.SetLabel, _("Pause"))
             wx.CallAfter(self.toolbarsizer.Layout)
+
+    def suspend(self, msg=None, empty_buffer=False):
+        if self.pending_suspend:
+            if empty_buffer:
+                self.pending_suspend = False
+                if self.suspend in self.recvlisteners:
+                    self.recvlisteners.remove(self.suspend)
+                self.plc_pipe.send(SUSPEND + REQ)
+            elif msg == 'ok':
+                update_timer(self.suspend)
+        else:
+            wx.CallAfter(self.pause)
+            self.pending_suspend = True
+            self.suspend = set_callback()(self.suspend)
+            set_callback(self.suspend, SMOOTHIE_BUFFER_TIMEOUT, wrapped_args=(('ok',), {}),
+                         callback_args=((), {'empty_buffer': True}))(self.suspend)
+            self.recvlisteners.append(self.suspend)
+            self.suspend.timer.start()
 
     def recover(self, event):
         self.extra_print_time = 0

@@ -140,6 +140,7 @@ class Pronsole(cmd.Cmd):
         self.plc_thread = None
         self.listen_to_plc = False
         self.plc_listen_interval = 1
+        self.pending_suspend = False
 
         self.status = Status()
         self.dynamic_temp = False
@@ -1204,13 +1205,12 @@ class Pronsole(cmd.Cmd):
             return
         else:
             if not self.p.printing:
-                self.logError(("Not printing, cannot pause."))
-                # Do not return for debugging
-            else:
-                self.p.pause()
-                self.paused = True
-            time.sleep(1)
-            self.plc_pipe.send(SUSPEND + REQ)
+                self.logError(("Not printing, cannot suspend."))
+                return
+            self.suspend()
+            self.log("Waiting for printer to empty buffer...")
+
+            # self.plc_pipe.send(SUSPEND + REQ)
 
     # Send [stop] command to plc which immediately aborts the print bypassing pronterface command queue
     def do_stop(self, l):
@@ -1224,8 +1224,10 @@ class Pronsole(cmd.Cmd):
         if self.plc is None:
             self.logError('Plc is not connected. Connect plc first.')
             return
-        else:
-            self.plc_pipe.send(CONTINUE + REQ)
+        if self.pending_suspend:
+            self.pending_suspend = False
+            return
+        self.plc_pipe.send(CONTINUE + REQ)
 
     def do_enable(self, l):
         if self.plc is None:
