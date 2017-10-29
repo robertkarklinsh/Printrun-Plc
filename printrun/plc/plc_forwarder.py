@@ -27,7 +27,7 @@ class PlcForwarder(object):
         self.sock.setsockopt(
             socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
 
-        self.sock.settimeout(30.0)
+        #self.sock.settimeout(30.0)
 
         if hostname is not None: self.hostname = hostname
         if port is not None: self.port = port
@@ -105,15 +105,18 @@ class PlcForwarder(object):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Ethernet to serial adapter for plc')
-    parser.add_argument('--tcp', help="IP socket address to listen in format 'hostname:port' ")
-    parser.add_argument('--serial', help='Plc serial port name')
-    parser.parse_args()
+    parser.add_argument('--tcp', dest='tcp', help="IP socket address to listen in format 'hostname:port' ")
+    parser.add_argument('--serial', dest='serial', help='Plc serial port name')
+    args = parser.parse_args()
 
     plc_forwarder = PlcForwarder()
-    plc_forwarder.open_serial_connection(port=parser.serial)
-    hostname, port = parser.eth.split(':')
-    port = int(port)
-    plc_forwarder.open_tcp_connection((hostname, port))
+    plc_forwarder.open_serial_connection(port=args.serial)
+    if args.tcp is not None:
+        hostname, port = args.tcp.split(':')
+        port = int(port)
+        plc_forwarder.open_tcp_connection(hostname, port)
+    else:
+        plc_forwarder.open_tcp_connection()
     try:
         plc_forwarder.start()
     except KeyboardInterrupt:
