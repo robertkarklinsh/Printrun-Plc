@@ -32,9 +32,12 @@ class PlcForwarder(object):
         if hostname is not None: self.hostname = hostname
         if port is not None: self.port = port
 
+
+
         try:
             self.sock.bind((self.hostname, self.port))
             self.sock.listen(1)
+            logging.debug('Listening on ' + self.hostname + ':' + str(self.port) + ' ...')
             self.tcp_conn, addr = self.sock.accept()
             self.tcp_conn = self.tcp_conn.makefile()
         except Exception as e:
@@ -110,7 +113,7 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     plc_forwarder = PlcForwarder()
-    plc_forwarder.open_serial_connection(port=args.serial)
+    #plc_forwarder.open_serial_connection(port=args.serial)
     if args.tcp is not None:
         hostname, port = args.tcp.split(':')
         port = int(port)

@@ -24,7 +24,7 @@ class PlcRemoteConnection(PlcConnection):
                 if hostname is not None:
                     self.hostname = hostname
                 if port is not None:
-                    self.port = port
+                    self.port = int(port)
             self.plc.connect((self.hostname, self.port))
             self.plc.settimeout(10.0)
             self.plc = self.plc.makefile('rw')
