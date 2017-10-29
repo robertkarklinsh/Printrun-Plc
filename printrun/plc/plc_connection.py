@@ -52,15 +52,15 @@ class PlcConnection(object):
         self.plc = None
         self.msg_queue = None
         self.command_queue = Queue()
-        self.stop_listen, self.stop_send = None, None
+        self.stop_listen, self.stop_send = False, False
         self.listen_thread, self.send_thread = None, None
 
         # Handles new messages from plc
         self.on_recv = None
         self.on_disconnect = None
-        self.log = None
-        self.logDebug = None
-        self.logError = None
+        self.log = logging.log
+        self.logDebug = logging.debug
+        self.logError = logging.error
 
     @locked
     def open(self, port=None, baud=None, printer_port=None):
@@ -92,7 +92,7 @@ class PlcConnection(object):
                               "\n" + ("Error: %s") % e)
             else:
                 self.logDebug('Plc is online')
-                self.stop_listen, self.stop_send = False, False
+                #self.stop_listen, self.stop_send = False, False
                 self.listen_thread = threading.Thread(target=self._listen, name='listen_thread')
                 self.listen_thread.start()
                 return True
@@ -154,11 +154,6 @@ class PlcConnection(object):
             try:
                 # Reads until '\n' is found or timeout expires.
                 msg = self.plc.read_until()
-                if msg:
-                    # self.log('Received message from %s: ' % self.port +
-                    #          '\n' + msg)
-                    # time.sleep(0.1)
-                    self.on_recv(msg.rstrip(' \n'))
             except PlcError as e:
                 self.logError('PlcCommunicationError on %s:' % self.port +
                               '\n' + e.message)
@@ -173,6 +168,10 @@ class PlcConnection(object):
                 fail_count += 1
             else:
                 fail_count = 0
+                # On_recv exceptions must be handled outside
+                if msg:
+                    if self.on_recv is not None:
+                        self.on_recv(msg.rstrip(' \n'))
             finally:
                 if fail_count > MAX_READ_ATTEMPTS - 2:
                     self.logError('Closing plc connection after %s ' % MAX_READ_ATTEMPTS + 'read attempts...')

@@ -1,3 +1,4 @@
+# Not working after handlers definition was moved into run() function!
 import sys
 import time
 from multiprocessing import Queue

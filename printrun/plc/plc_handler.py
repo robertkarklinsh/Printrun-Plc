@@ -4,6 +4,7 @@ import multiprocessing
 from threading import Timer
 
 from printrun.plc import *
+from printrun.plc.plc_remote_connection import PlcRemoteConnection
 from printrun.plc.plc_connection import PlcConnection
 from printrun.utils import PlcError
 
@@ -80,7 +81,9 @@ class PlcHandler(multiprocessing.Process):
         multiprocessing.Process.__init__(self)
 
         self.outer_pipe = multiprocessing.Pipe()
-        self.connection = PlcConnection()
+        # self.connection = PlcConnection()
+        # Remote connection is established via Raspberry as ethernet-to-serial adapter
+        self.connection = PlcRemoteConnection()
         self.printer_port = printer_port
         self.connection.on_recv = self.on_recv
         self.connection.on_disconnect = self.on_disconnect
