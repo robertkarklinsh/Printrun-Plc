@@ -6,104 +6,147 @@ import time
 
 from serial import SerialException
 from plc_connection import PlcConnection
+from printrun.utils import PlcError
 
 RASP_DEFAULT_HOSTNAME = 'localhost'
 RASP_DEFAULT_PORT = 8080
+
+logger = logging.getLogger()
+logger.setLevel(logging.DEBUG)
+
+ch = logging.StreamHandler(sys.stdout)
+ch.setLevel(logging.DEBUG)
+formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+ch.setFormatter(formatter)
+logger.addHandler(ch)
+
+
+def flushed_write(file_object):
+    def wrraped(msg):
+        file_object.write(msg)
+        file_object.flush()
+
+    return wrraped
 
 
 class PlcForwarder(object):
     def __init__(self):
         self.serial_conn = PlcConnection()
-        self.serial_conn.log, self.serial_conn.logError, self.serial_conn.logDebug = logging.log, logging.debug, logging.error
+        self.serial_conn.log, self.serial_conn.logError, self.serial_conn.logDebug = logger.log, logger.error, logger.debug
         self.sock = None
         self.tcp_conn = None
         self.hostname = RASP_DEFAULT_HOSTNAME
         self.port = RASP_DEFAULT_PORT
+        self.client_addr = None
         self.stop_forwarding = False
 
     def open_tcp_connection(self, hostname=None, port=None):
         self.sock = socket.socket(socket.AF_INET,
                                   socket.SOCK_STREAM)
+        self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+
         self.sock.setsockopt(
             socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
 
-        #self.sock.settimeout(30.0)
+        # self.sock.settimeout(30.0)
 
         if hostname is not None: self.hostname = hostname
         if port is not None: self.port = port
 
-
-
         try:
             self.sock.bind((self.hostname, self.port))
             self.sock.listen(1)
-            logging.debug('Listening on ' + self.hostname + ':' + str(self.port) + ' ...')
+            logger.debug('Listening on ' + self.hostname + ':' + str(self.port) + ' ...')
             self.tcp_conn, addr = self.sock.accept()
-            self.tcp_conn = self.tcp_conn.makefile()
-        except Exception as e:
-            logging.error("Couldn't open tcp connection %s:%s" % (self.hostname, self.port) +
-                          "\n" + "Socket error: %s" % e)
+            self.client_addr = addr[0]
+            logger.debug("%s " % self.client_addr + "connected")
+            self.sock = self.tcp_conn
+            self.tcp_conn = self.tcp_conn.makefile(mode='r+')
+        except Exception as er:
+            logger.error("Couldn't open tcp connection %s:%s" % (self.hostname, self.port) +
+                         "\n" + "Socket error: %s" % er)
 
-            self.stop()
-            sys.exit(1)
-        else:
-            logging.debug("%s " % addr[0] + "connected")
-            return True
+            self.exit()
+        return True
 
     def open_serial_connection(self, port=None, baud=None):
+        if self.tcp_conn is None:
+            logger.error("Can't open serial with no tcp connection, exiting...")
+            self.exit()
+        if self.serial_conn is None:
+            self.serial_conn = PlcConnection()
         if not self.serial_conn.open(port, baud):
-            self.stop()
-            sys.exit(1)
-        else:
-            return True
+            logger.error("Couldn't open serial connection, exiting...")
+            self.exit()
+        self.serial_conn.on_recv = flushed_write(self.tcp_conn)
+        self.serial_conn.on_disconnect = self.exit
+        return True
 
     def start(self):
 
         if self.serial_conn is None:
-            raise Exception("Couldn't start forwarding, no serial connection")
+            logger.error("Couldn't start forwarding, no serial connection")
+            self.exit()
         if self.tcp_conn is None:
-            raise Exception("Couldn't start forwarding, no tcp connection")
-        msg = None
+            logger.error("Couldn't start forwarding, no tcp connection")
+            self.exit()
         read_attempts_count = 4
-        write_attempts_count = 4
-        self.serial_conn.on_recv = self.sock.send
         while not self.stop_forwarding:
             if read_attempts_count < 1:
-                raise Exception("Closing connections and exiting after 4 read attempts...")
-            if write_attempts_count < 1:
-                raise Exception("Closing connections and exiting after 4 write attempts...")
+                logger.error("Closing connections and exiting after 4 read attempts...")
+                self.exit()
             try:
                 msg = self.tcp_conn.readline()
-            except socket.error as e:
-                logging.error("Couldn't read from tcp" + '\n' +
-                              "Socket error: %s" % e)
+                logger.debug("Received message on tcp:" + msg)
+            except socket.error as er:
+                logger.error("Couldn't read from tcp" + '\n' +
+                             "Socket error: %s" % er)
                 read_attempts_count -= 1
-            except Exception as e:
-                logging.error("Couldn't read from tcp" + '\n' +
-                              "Error: %s" % e)
+            except Exception as er:
+                logger.error("Couldn't read from tcp" + '\n' +
+                             "Error: %s" % er)
                 read_attempts_count -= 1
             else:
                 read_attempts_count = 4
-            try:
-                self.serial_conn.send(msg)
-            except SerialException as e:
-                logging.error("Couldn't write to serial" + '\n' +
-                              "Serial error: %s" % e)
-                write_attempts_count -= 1
-            except Exception as e:
-                logging.error("Couldn't write to serial" + '\n' +
-                              "Error: %s" % e)
-                write_attempts_count -= 1
-            else:
-                write_attempts_count = 4
-        return True
+                if msg:
+                    if len(msg) > 0:
+                        self.serial_conn.send(msg)
+                else:
+                    logger.debug("%s " % self.client_addr + " disconnected, closing connections...")
+                    if self.serial_conn is not None:
+                        try:
+                            self.serial_conn.close()
+                        except PlcError as er:
+                            logger.error(er.message)
+                            self.exit()
+                        self.serial_conn = None
+                    if self.tcp_conn is not None:
+                        try:
+                            logger.debug("Closing connection on %s:%s..." % (self.hostname, self.port))
+                            self.tcp_conn.close()
+                            self.sock.close()
+                        except Exception as er:
+                            logger.error("Couldn't close tcp connection on %s:%s" % (self.hostname, self.port)
+                                         + "\n" + "Error: %s" % er)
+                            self.exit()
+                        self.tcp_conn = None
+                    self.stop_forwarding = True
 
-    def stop(self):
+    def exit(self, status=1):
         self.stop_forwarding = True
         if self.serial_conn is not None:
-            self.serial_conn.close(force=True)
+            try:
+                self.serial_conn.close()
+            except PlcError as er:
+                logger.error(er.message)
         if self.tcp_conn is not None:
-            self.tcp_conn.close()
+            try:
+                self.tcp_conn.close()
+                self.sock.close()
+            except Exception as er:
+                logger.error("Couldn't close tcp connection on %s:%s" % (self.hostname, self.port)
+                             + "\n" + "Error: %s" % er)
+        sys.exit(status)
 
 
 if __name__ == '__main__':
@@ -113,20 +156,21 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     plc_forwarder = PlcForwarder()
-    #plc_forwarder.open_serial_connection(port=args.serial)
     if args.tcp is not None:
-        hostname, port = args.tcp.split(':')
-        port = int(port)
-        plc_forwarder.open_tcp_connection(hostname, port)
-    else:
-        plc_forwarder.open_tcp_connection()
+        plc_forwarder.hostname, port = args.tcp.split(':')
+        plc_forwarder.port = int(port)
     try:
-        plc_forwarder.start()
+        while True:
+            if not plc_forwarder.open_tcp_connection():
+                plc_forwarder.exit()
+            if not plc_forwarder.open_serial_connection(port=args.serial):
+                plc_forwarder.exit()
+            plc_forwarder.start()
+            plc_forwarder.stop_forwarding = False
+
     except KeyboardInterrupt:
         print "Closing connections and exiting..."
-        plc_forwarder.stop()
-        sys.exit(0)
+        plc_forwarder.exit()
     except Exception as e:
-        plc_forwarder.stop()
         print str(e) + "\n"
-        sys.exit(1)
+        plc_forwarder.exit()

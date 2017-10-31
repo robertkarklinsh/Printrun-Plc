@@ -13,6 +13,7 @@ SUSPEND_TIMEOUT = 1
 STOP_TIMEOUT = 0.1
 POWER_UP_TIMEOUT = 5
 POWER_DOWN_TIMEOUT = 5
+HARD_RESET_TIMEOUT = 5
 INFO_TIMEOUT = 0.25
 
 CONTROLLINO_PORT = '/dev/ttyACM'
@@ -181,6 +182,17 @@ class PlcHandler(multiprocessing.Process):
             if context == RESP:
                 self.logDebug('RECV:PLC: Printer enabled')
 
+        @set_callback()
+        def on_hardreset(context, msg=None):
+            if context == REQ:
+                self.connection.send(HARDRESET)
+                set_callback(self.on_error, HARD_RESET_TIMEOUT, wrapped_args=((RESP,), {}), callback_args=((
+                                                                                                         'Could not receive response for hardreset for %s' % HARD_RESET_TIMEOUT,),
+                                                                                                     {}))(
+                    on_hardreset)
+            if context == RESP:
+                self.logDebug('RECV:PLC: Hard reset issued, please wait')
+
         def on_e_limits(msg=None):
             self.log('RECV: Emergency limit activated!')
 
@@ -191,7 +203,7 @@ class PlcHandler(multiprocessing.Process):
             self.inner_queue = Queue.Queue()
             self.connected.set()
             set_callback(self.on_error, CHECK_STATUS_TIMEOUT, callback_args=(
-                ('Plc not responding on %(port)s',),
+                ('Plc not responding on %(hostname)s:%(port)s',),
                 {}))(check_status)
             check_status.timer.start()
         else:
@@ -207,7 +219,8 @@ class PlcHandler(multiprocessing.Process):
             SUSPEND: on_suspend,
             CONTINUE: on_continue,
             STOP: on_stop,
-            ENABLE: on_enable
+            ENABLE: on_enable,
+            HARDRESET: on_hardreset
         }
 
         while not self.stopped.is_set():
@@ -230,7 +243,7 @@ class PlcHandler(multiprocessing.Process):
                         e = PlcError('Received corrupted message on %(port)s, check connection' +
                                      '\n' + 'Error: %s' % ex,
                                      port=self.connection.port)
-                        self.on_error(e)
+                        self.on_error(e.message)
             except Exception:
                 pass
 
@@ -259,7 +272,7 @@ class PlcHandler(multiprocessing.Process):
     def on_recv(self, msg):
         if self.inner_queue is not None:
             try:
-                self.inner_queue.put(msg)
+                self.inner_queue.put(msg.rstrip(' \n'))
             except Queue.Full as e:
                 self.logError('Message queue overflow: %s' % e)
 
@@ -268,6 +281,7 @@ class PlcHandler(multiprocessing.Process):
         e.message = msg
         if self.connected.is_set():
             e.port = self.connection.port
+            e.hostname = self.connection.hostname
         for kw in kwargs:
             e.__setattr__(kw, kwargs[kw])
         self.outer_pipe[1].send('e' + e.message)

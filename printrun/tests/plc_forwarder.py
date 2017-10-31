@@ -25,7 +25,7 @@ if __name__ == '__main__':
         time.sleep(1)
         plc_handler.stopped.set()
         plc_handler.join()
-        plc_forwarder.stop()
+        plc_forwarder.exit()
         if thread is not None:
             thread.join()
         plc_forwarder.serial_conn.send.assert_any_call(test_msg + "\n")

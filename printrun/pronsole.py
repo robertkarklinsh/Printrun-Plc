@@ -1236,6 +1236,14 @@ class Pronsole(cmd.Cmd):
         else:
             self.plc_pipe.send(ENABLE + REQ)
 
+    def do_hardreset(self, l):
+        if self.plc is None:
+            self.logError('Plc is not connected. Connect plc first.')
+            return
+        else:
+            self.plc_pipe.send(HARDRESET + REQ)
+
+
     def help_resume(self):
         self.log(("Resumes a paused print."))
 
