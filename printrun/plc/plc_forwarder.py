@@ -151,14 +151,18 @@ class PlcForwarder(object):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Ethernet to serial adapter for plc')
-    parser.add_argument('--tcp', dest='tcp', help="IP socket address to listen in format 'hostname:port' ")
+    parser.add_argument('--hostname', dest='hostname', default=RASP_DEFAULT_HOSTNAME,
+                        help='Hostname of socket to listen')
+    parser.add_argument('--port', dest='port', default=RASP_DEFAULT_PORT, help='Port of socket to listen')
     parser.add_argument('--serial', dest='serial', help='Plc serial port name')
     args = parser.parse_args()
 
     plc_forwarder = PlcForwarder()
-    if args.tcp is not None:
-        plc_forwarder.hostname, port = args.tcp.split(':')
-        plc_forwarder.port = int(port)
+
+    address = args.hostname + ':' + args.port
+    plc_forwarder.hostname, port = args.tcp.split(':')
+    plc_forwarder.port = int(port)
+
     try:
         while True:
             if not plc_forwarder.open_tcp_connection():
@@ -169,8 +173,8 @@ if __name__ == '__main__':
             plc_forwarder.stop_forwarding = False
 
     except KeyboardInterrupt:
-        print "Closing connections and exiting..."
+        print ("Closing connections and exiting...")
         plc_forwarder.exit()
     except Exception as e:
-        print str(e) + "\n"
+        print (str(e) + "\n")
         plc_forwarder.exit()

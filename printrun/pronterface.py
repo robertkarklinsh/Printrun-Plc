@@ -1,19 +1,19 @@
 #!/usr/bin/env python
 
-# This file is part of the Printrun suite.
+# This file is part of the Printrun-Plc suite.
 #
-# Printrun is free software: you can redistribute it and/or modify
+# Printrun-Plc is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 #
-# Printrun is distributed in the hope that it will be useful,
+# Printrun-Plc is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with Printrun.  If not, see <http://www.gnu.org/licenses/>.
+# along with Printrun-Plc.  If not, see <http://www.gnu.org/licenses/>.
 
 import os
 import Queue
@@ -73,6 +73,7 @@ from .settings import wxSetting, HiddenSetting, StringSetting, SpinSetting, \
     FloatSpinSetting, BooleanSetting, StaticTextSetting
 from printrun import gcoder
 from .pronsole import REPORT_NONE, REPORT_POS, REPORT_TEMP, REPORT_MANUAL
+
 
 class ConsoleOutputHandler(object):
     """Handle console output. All messages go through the logging submodule. We setup a logging handler to get logged
@@ -824,7 +825,7 @@ class PronterWindow(MainWindow, pronsole.Pronsole):
 
         m = wx.Menu()
         self.Bind(wx.EVT_MENU, self.about,
-                  m.Append(-1, _("&About Printrun"), _("Show about dialog")))
+                  m.Append(-1, _("&About Printrun-Plc"), _("Show about dialog")))
         self.menustrip.Append(m, _("&Help"))
 
     def project(self, event):
@@ -853,10 +854,10 @@ class PronterWindow(MainWindow, pronsole.Pronsole):
         info = wx.AboutDialogInfo()
 
         info.SetIcon(wx.Icon(iconfile("pronterface.png"), wx.BITMAP_TYPE_PNG))
-        info.SetName('Printrun')
+        info.SetName('Printrun-Plc')
         info.SetVersion(printcore.__version__)
 
-        description = _("Printrun is a pure Python 3D printing"
+        description = _("Printrun-Plc is a pure Python 3D printing"
                         " (and other types of CNC) host software.")
 
         description += "\n\n" + \
@@ -865,20 +866,20 @@ class PronterWindow(MainWindow, pronsole.Pronsole):
 
         info.SetDescription(description)
         info.SetCopyright('(C) 2011 - 2015')
-        info.SetWebSite('https://github.com/kliment/Printrun')
+        info.SetWebSite('https://github.com/kliment/Printrun-Plc')
 
         licence = """\
-Printrun is free software: you can redistribute it and/or modify it under the
+Printrun-Plc is free software: you can redistribute it and/or modify it under the
 terms of the GNU General Public License as published by the Free Software
 Foundation, either version 3 of the License, or (at your option) any later
 version.
 
-Printrun is distributed in the hope that it will be useful, but WITHOUT ANY
+Printrun-Plc is distributed in the hope that it will be useful, but WITHOUT ANY
 WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
 PARTICULAR PURPOSE.  See the GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License along with
-Printrun. If not, see <http://www.gnu.org/licenses/>."""
+Printrun-Plc. If not, see <http://www.gnu.org/licenses/>."""
 
         info.SetLicence(licence)
         info.AddDeveloper('Kliment Yanev')
@@ -1233,12 +1234,14 @@ Printrun. If not, see <http://www.gnu.org/licenses/>."""
             self.status_thread = None
 
         # Disconnect from plc
-        self.listen_to_plc = False
-        self.plc_thread.join()
-        self.plc_thread = None
-        self.plc.stopped.set()
-        self.plc.join()
-        self.plc = None
+        if self.plc_thread:
+            self.listen_to_plc = False
+            self.plc_thread.join()
+            self.plc_thread = None
+        if self.plc:
+            self.plc.stopped.set()
+            self.plc.join()
+            self.plc = None
 
         wx.CallAfter(self.connectbtn.SetLabel, "Connect")
         wx.CallAfter(self.connectbtn.SetToolTip, wx.ToolTip("Connect to the printer"))

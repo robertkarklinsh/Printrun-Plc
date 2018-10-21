@@ -1,19 +1,19 @@
 #!/usr/bin/env python
 
-# This file is part of the Printrun suite.
+# This file is part of the Printrun-Plc suite.
 #
-# Printrun is free software: you can redistribute it and/or modify
+# Printrun-Plc is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 #
-# Printrun is distributed in the hope that it will be useful,
+# Printrun-Plc is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with Printrun.  If not, see <http://www.gnu.org/licenses/>.
+# along with Printrun-Plc.  If not, see <http://www.gnu.org/licenses/>.
 
 import sys
 import os
@@ -158,11 +158,11 @@ cmdclass = {"uninstall": uninstall,
 if build_ext:
     cmdclass['build_ext'] = build_ext
 
-setup(name = "Printrun",
+setup(name = "Printrun-Plc",
       version = printcore_version,
       description = "Host software for 3D printers",
       author = "Kliment Yanev",
-      url = "http://github.com/kliment/Printrun/",
+      url = "http://github.com/kliment/Printrun-Plc/",
       license = "GPLv3",
       data_files = data_files,
       packages = ["printrun", "printrun.gl", "printrun.gl.libtatlin", "printrun.gui", "printrun.power", "printrun.plugins"],

@@ -1,19 +1,19 @@
 #!/usr/bin/env python
 
-# This file is part of the Printrun suite.
+# This file is part of the Printrun-Plc suite.
 #
-# Printrun is free software: you can redistribute it and/or modify
+# Printrun-Plc is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 #
-# Printrun is distributed in the hope that it will be useful,
+# Printrun-Plc is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with Printrun.  If not, see <http://www.gnu.org/licenses/>.
+# along with Printrun-Plc.  If not, see <http://www.gnu.org/licenses/>.
 
 import argparse
 import cmd
@@ -787,7 +787,7 @@ class Pronsole(cmd.Cmd):
 
     def parse_cmdline(self, args):
         parser = argparse.ArgumentParser(
-            description='Printrun 3D printer interface')
+            description='Printrun-Plc 3D printer interface')
         self.add_cmdline_arguments(parser)
         args = [arg for arg in args if not arg.startswith("-psn")]
         args = parser.parse_args(args=args)

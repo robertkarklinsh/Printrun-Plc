@@ -199,7 +199,7 @@ class PlcHandler(multiprocessing.Process):
         def on_e_button(msg=None):
             self.log('RECV: Emergency button pressed!')
 
-        if self.connection.open(printer_port=self.printer_port):
+        if self.connection.open(port=self.printer_port):
             self.inner_queue = Queue.Queue()
             self.connected.set()
             set_callback(self.on_error, CHECK_STATUS_TIMEOUT, callback_args=(

@@ -3,7 +3,7 @@ from printrun.utils import PlcError
 import socket
 import threading
 
-RASP_DEFAULT_HOSTNAME = '10.0.0.30'
+RASP_DEFAULT_HOSTNAME = '10.0.0.31'
 RASP_DEFAULT_PORT = 8080
 
 

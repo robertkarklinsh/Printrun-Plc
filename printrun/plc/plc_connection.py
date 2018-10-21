@@ -1,9 +1,14 @@
 import logging
 import threading
 import time
+import sys
+import os.path
+
+
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), os.path.pardir)))
 
 from Queue import Queue, Full, Empty
-from printrun.serialWrapper import Serial, PARITY_NONE, PARITY_ODD, SerialException
+from serialWrapper import Serial, PARITY_NONE, PARITY_ODD, SerialException
 from functools import wraps
 from printrun.utils import PlcError
 from printrun.plc import (ACK, SYN, EOT)
