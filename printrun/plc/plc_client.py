@@ -39,15 +39,16 @@ def main():
 
         while True:
             user_input = str(raw_input("Enter your command: "))
-            command = msg_handlers[user_input] + REQ
-            if plc.connected.is_set():
-                pipe.send(command)
-            else:
-                print ("Plc disconnected, exiting...")
-                return 1
+            try:
+                command = msg_handlers[user_input] + REQ
+                if plc.connected.is_set():
+                    pipe.send(command)
+                else:
+                    print ("Plc disconnected, exiting...")
+                    return 1
+            except KeyError as e:
+                print("The entered command is invalid, try again")
 
-    except KeyError as e:
-        print("The entered command is invalid, try again")
     except KeyboardInterrupt as e:
         print("Goodbye")
         plc.stopped.set()
