@@ -2,11 +2,15 @@ import Queue
 import logging
 import multiprocessing
 from threading import Timer
+import sys
+import os.path
 
-from printrun.plc import *
-from printrun.plc.plc_remote_connection import PlcRemoteConnection
-from printrun.plc.plc_connection import PlcConnection
-from printrun.utils import PlcError
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), os.path.pardir)))
+
+from plc import *
+from plc.plc_remote_connection import PlcRemoteConnection
+from plc.plc_connection import PlcConnection
+from utils import PlcError
 
 CHECK_STATUS_TIMEOUT = 5
 SUSPEND_TIMEOUT = 1
