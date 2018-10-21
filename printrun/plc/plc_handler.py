@@ -288,7 +288,8 @@ class PlcHandler(multiprocessing.Process):
         e.message = msg
         if self.connected.is_set():
             e.port = self.connection.port
-            e.hostname = self.connection.hostname
+            if self.connection.hostname is not None:
+                e.hostname = self.connection.hostname
         for kw in kwargs:
             e.__setattr__(kw, kwargs[kw])
         self.outer_pipe[1].send('e' + e.message)

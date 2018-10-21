@@ -52,6 +52,7 @@ class PlcConnection(object):
     def __init__(self):
         self.port = CONTROLLINO_PORT
         self.baud = CONTROLLINO_BAUD
+        self.hostname = None
         self.timeout = PLC_CONNECTION_TIMEOUT
         self.parity = PARITY_NONE
         self.plc = None
