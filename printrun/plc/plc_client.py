@@ -24,7 +24,7 @@ msg_handlers = {
 def main():
 
     parser = argparse.ArgumentParser(description='Simple console client to send commands to plc through raspberry')
-    parser.add_argument('--hostname', dest='hostname', help="IP socket hostname of raspberry ")
+    parser.add_argument('--hostname', default='10.0.0.31', dest='hostname', help="IP socket hostname of raspberry ")
     args = parser.parse_args()
 
     plc = PlcHandler(args.hostname + ':' + RASP_DEFAULT_PORT)
@@ -38,7 +38,11 @@ def main():
         try:
             user_input = str(raw_input("Enter your command: "))
             command = msg_handlers[user_input] + REQ
-            pipe.send(command)
+            if plc.connected.is_set():
+                pipe.send(command)
+            else:
+                print ("Plc disconnected, exiting...")
+                return 1
         except KeyError as e:
             print("The entered command is invalid, try again")
         except KeyboardInterrupt as e:
