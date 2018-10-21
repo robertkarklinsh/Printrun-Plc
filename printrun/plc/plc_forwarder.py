@@ -3,10 +3,13 @@ import socket
 import logging
 import argparse
 import time
+import os.path
+
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), os.path.pardir)))
 
 from serial import SerialException
 from plc_connection import PlcConnection
-from printrun.utils import PlcError
+from utils import PlcError
 
 RASP_DEFAULT_HOSTNAME = 'localhost'
 RASP_DEFAULT_PORT = 8080
@@ -159,9 +162,8 @@ if __name__ == '__main__':
 
     plc_forwarder = PlcForwarder()
 
-    address = args.hostname + ':' + args.port
-    plc_forwarder.hostname, port = args.tcp.split(':')
-    plc_forwarder.port = int(port)
+    plc_forwarder.hostname = args.hostname
+    plc_forwarder.port = int(args.port)
 
     try:
         while True:
