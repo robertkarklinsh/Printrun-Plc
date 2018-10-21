@@ -78,13 +78,16 @@ def update_timer(f):
 
 
 class PlcHandler(multiprocessing.Process):
-    def __init__(self, printer_port=None):
+    def __init__(self, local=True, printer_port=None):
         multiprocessing.Process.__init__(self)
 
         self.outer_pipe = multiprocessing.Pipe()
         # self.connection = PlcConnection()
         # Remote connection is established via Raspberry as ethernet-to-serial adapter
-        self.connection = PlcRemoteConnection()
+        if local:
+            self.connection = PlcConnection()
+        else:
+            self.connection = PlcRemoteConnection()
         self.printer_port = printer_port
         self.connection.on_recv = self.on_recv
         self.connection.on_disconnect = self.on_disconnect
