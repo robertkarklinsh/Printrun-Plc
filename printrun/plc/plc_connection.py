@@ -10,8 +10,8 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), os.path.
 from Queue import Queue, Full, Empty
 from serialWrapper import Serial, PARITY_NONE, PARITY_ODD, SerialException
 from functools import wraps
-from printrun.utils import PlcError
-from printrun.plc import (ACK, SYN, EOT)
+from utils import PlcError
+from plc import (ACK, SYN, EOT)
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
